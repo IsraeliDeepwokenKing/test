@@ -10,9 +10,7 @@ class CarryButtons(discord.ui.View):
 
     def __init__(self, bot, carry_id):
 
-        super().__init__(
-            timeout=None
-        )
+        super().__init__(timeout=None)
 
         self.bot = bot
         self.carry_id = carry_id
@@ -25,18 +23,14 @@ class CarryButtons(discord.ui.View):
         custom_id="carry_join"
     )
     async def join(
-
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button
-
     ):
-
 
         carry = self.bot.carries.get(
             self.carry_id
         )
-
 
         if not carry:
 
@@ -44,7 +38,6 @@ class CarryButtons(discord.ui.View):
                 "This carry no longer exists.",
                 ephemeral=True
             )
-
             return
 
 
@@ -54,7 +47,23 @@ class CarryButtons(discord.ui.View):
 
 
 
-        if user_id in carry["active"] or user_id in carry["waiting"]:
+        # Host cannot join own carry
+
+        if user_id == carry["host"]:
+
+            await interaction.response.send_message(
+                "You cannot join your own carry.",
+                ephemeral=True
+            )
+
+            return
+
+
+
+        if (
+            user_id in carry["active"]
+            or user_id in carry["waiting"]
+        ):
 
             await interaction.response.send_message(
                 "You are already in this queue.",
@@ -66,7 +75,6 @@ class CarryButtons(discord.ui.View):
 
 
         guild = interaction.guild
-
 
         role = guild.get_role(
             carry["role"]
@@ -82,14 +90,13 @@ class CarryButtons(discord.ui.View):
             )
 
 
+            location = "Active"
+
+
             await give_carry_role(
                 user,
                 role
             )
-
-
-            location = "Active"
-
 
 
         else:
@@ -105,7 +112,6 @@ class CarryButtons(discord.ui.View):
 
 
 
-        # JOIN LOG
 
         carry["join_log"].append({
 
@@ -127,11 +133,8 @@ class CarryButtons(discord.ui.View):
 
 
         await interaction.response.send_message(
-
             f"You joined as {location}.",
-
             ephemeral=True
-
         )
 
 
@@ -144,11 +147,9 @@ class CarryButtons(discord.ui.View):
         custom_id="carry_leave"
     )
     async def leave(
-
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button
-
     ):
 
 
@@ -172,7 +173,6 @@ class CarryButtons(discord.ui.View):
         user_id = user.id
 
         guild = interaction.guild
-
 
         role = guild.get_role(
             carry["role"]
@@ -199,9 +199,7 @@ class CarryButtons(discord.ui.View):
 
 
 
-            # Move waiting player
-
-            if len(carry["waiting"]) > 0:
+            if carry["waiting"]:
 
 
                 promoted = carry["waiting"].pop(0)
@@ -234,24 +232,16 @@ class CarryButtons(discord.ui.View):
             )
 
 
-
         else:
 
-
             await interaction.response.send_message(
-
                 "You are not in this queue.",
-
                 ephemeral=True
-
             )
 
             return
 
 
-
-
-        # LEAVE LOG
 
         carry["leave_log"].append({
 
@@ -270,30 +260,9 @@ class CarryButtons(discord.ui.View):
 
 
 
-        message = "You left the carry."
-
-
-        if promoted:
-
-            member = guild.get_member(
-                promoted
-            )
-
-            if member:
-
-                message += (
-                    f"\n{member.mention} moved "
-                    "from waiting to active."
-                )
-
-
-
         await interaction.response.send_message(
-
-            message,
-
+            "You left the carry.",
             ephemeral=True
-
         )
 
 
@@ -319,11 +288,9 @@ async def update_carry_message(bot, carry):
 
 
 
-    active_text = ""
-
+    active = ""
 
     for i in range(carry["max"]):
-
 
         if i < len(carry["active"]):
 
@@ -331,42 +298,36 @@ async def update_carry_message(bot, carry):
                 carry["active"][i]
             )
 
-            if member:
-
-                active_text += (
-                    f"①②③④⑤⑥⑦⑧⑨⑩"[i]
-                    + f" {member.mention}\n"
-                )
+            active += (
+                f"{i+1}. {member.mention}\n"
+                if member else
+                f"{i+1}. Unknown\n"
+            )
 
         else:
 
-            active_text += (
-                f"{i+1}. -\n"
-            )
+            active += f"{i+1}. -\n"
 
 
 
-
-    waiting_text = ""
+    waiting = ""
 
 
     if carry["waiting"]:
 
-
         for i, uid in enumerate(carry["waiting"]):
 
-            member = guild.get_member(
-                uid
-            )
+            member = guild.get_member(uid)
 
-            waiting_text += (
-                f"{i+1}. "
-                f"{member.mention}\n"
+            waiting += (
+                f"{i+1}. {member.mention}\n"
+                if member else
+                f"{i+1}. Unknown\n"
             )
 
     else:
 
-        waiting_text = "None"
+        waiting = "None"
 
 
 
@@ -386,12 +347,12 @@ Host:
 
 Active ({len(carry['active'])}/{carry['max']})
 
-{active_text}
+{active}
 
 
 Waiting ({len(carry['waiting'])})
 
-{waiting_text}
+{waiting}
 
 
 Status:
@@ -400,6 +361,7 @@ Open
 """
 
     )
+
 
 
     await message.edit(

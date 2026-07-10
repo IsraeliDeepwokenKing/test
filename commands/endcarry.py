@@ -17,17 +17,15 @@ class EndCarry(commands.Cog):
 
     @app_commands.command(
         name="endcarry",
-        description="End a current carry"
+        description="End a carry"
     )
     @app_commands.describe(
-        carry_id="The carry ID to end"
+        carry_id="Carry ID"
     )
     async def endcarry(
-
         self,
         interaction: discord.Interaction,
         carry_id: str
-
     ):
 
 
@@ -58,17 +56,11 @@ class EndCarry(commands.Cog):
 
 
 
-        # Only host can end
-
         if interaction.user.id != carry["host"]:
 
-
             await interaction.response.send_message(
-
                 "Only the host can end this carry.",
-
                 ephemeral=True
-
             )
 
             return
@@ -85,9 +77,6 @@ class EndCarry(commands.Cog):
 
 
 
-        # Remove carry roles
-
-
         role = guild.get_role(
             carry["role"]
         )
@@ -96,13 +85,9 @@ class EndCarry(commands.Cog):
         if role:
 
 
-            for user_id in carry["active"]:
+            for uid in carry["active"]:
 
-
-                member = guild.get_member(
-                    user_id
-                )
-
+                member = guild.get_member(uid)
 
                 if member:
 
@@ -113,28 +98,22 @@ class EndCarry(commands.Cog):
 
 
 
-        # Delete message
-
-
-        if carry["message"] and carry["channel"]:
+        if carry["message"]:
 
 
             channel = guild.get_channel(
                 carry["channel"]
             )
 
-
             if channel:
-
 
                 try:
 
-                    message = await channel.fetch_message(
+                    msg = await channel.fetch_message(
                         carry["message"]
                     )
 
-                    await message.delete()
-
+                    await msg.delete()
 
                 except:
 
@@ -143,36 +122,20 @@ class EndCarry(commands.Cog):
 
 
 
-        # Delete stage
-
-
         stage = guild.get_channel(
             carry["stage"]
         )
 
-
         if stage:
 
-            await stage.delete(
-                reason="Carry ended"
-            )
+            await stage.delete()
 
-
-
-
-        # Delete role
 
 
         if role:
 
-            await role.delete(
-                reason="Carry ended"
-            )
+            await role.delete()
 
-
-
-
-        # Remove from memory
 
 
         del self.bot.carries[carry_id]
@@ -180,14 +143,9 @@ class EndCarry(commands.Cog):
 
 
         await interaction.followup.send(
-
-            f"Carry `{carry_id}` has been ended.",
-
+            f"Carry `{carry_id}` ended.",
             ephemeral=True
-
         )
-
-
 
 
 
