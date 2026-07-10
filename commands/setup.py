@@ -4,75 +4,99 @@ from discord.ext import commands
 
 
 class Setup(commands.Cog):
+
     def __init__(self, bot):
         self.bot = bot
 
 
     @app_commands.command(
         name="setup",
-        description="Setup Deepwoken carry sistema"
+        description="Setup Deepwoken carry system"
     )
-    async def setup(self, interaction: discord.Interaction):
+    async def setup(
+        self,
+        interaction: discord.Interaction
+    ):
 
         guild = interaction.guild
 
-        await interaction.response.defer(ephemeral=True)
 
-
-        # Provjera admina
         if not interaction.user.guild_permissions.administrator:
-            await interaction.followup.send(
-                "Nemaš dozvolu za ovu komandu."
+            await interaction.response.send_message(
+                "You need Administrator permission.",
+                ephemeral=True
             )
             return
 
 
-        # Napravi kategoriju
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+
+        # CATEGORY
+
         category = discord.utils.get(
             guild.categories,
             name="Deepwoken Carry"
         )
 
+
         if category is None:
+
             category = await guild.create_category(
                 "Deepwoken Carry"
             )
 
 
-        # Napravi kanale
+        # CHANNELS
 
-        channels = {}
-
-        for name in [
+        channel_names = [
             "carry-hosts",
             "incident-reports",
             "logs"
-        ]:
+        ]
+
+
+        channels = {}
+
+
+        for name in channel_names:
 
             channel = discord.utils.get(
                 guild.text_channels,
                 name=name
             )
 
+
             if channel is None:
+
                 channel = await guild.create_text_channel(
-                    name,
+                    name=name,
                     category=category
                 )
+
 
             channels[name] = channel.id
 
 
 
-        # Roleovi
-
-        roles = {}
+        # ROLES
 
         role_names = [
+
             "Titus Hoster",
             "Elder Primadon Hoster",
-            "Heart of Enmity Hoster"
+            "Heart of Enmity Hoster",
+
+            "Titus Ping",
+            "Elder Primadon Ping",
+            "Heart of Enmity Ping"
+
         ]
+
+
+        roles = {}
 
 
         for name in role_names:
@@ -82,41 +106,58 @@ class Setup(commands.Cog):
                 name=name
             )
 
+
             if role is None:
+
                 role = await guild.create_role(
                     name=name,
-                    reason="Deepwoken carry setup"
+                    mentionable=True,
+                    reason="Deepwoken carry system"
                 )
+
 
             roles[name] = role.id
 
 
 
-        # spremanje privremeno u bot memoriju
+        # SAVE SETTINGS
 
         if not hasattr(self.bot, "settings"):
+
             self.bot.settings = {}
 
+
         self.bot.settings[guild.id] = {
+
             "category": category.id,
+
             "channels": channels,
+
             "roles": roles
+
         }
 
 
+
         await interaction.followup.send(
-            "Setup završen.\n\n"
-            "Kreirano:\n"
+            "Setup completed.\n\n"
+            "Created channels:\n"
             "- carry-hosts\n"
             "- incident-reports\n"
             "- logs\n\n"
-            "Boss roleovi:\n"
+            "Created roles:\n"
             "- Titus Hoster\n"
             "- Elder Primadon Hoster\n"
-            "- Heart of Enmity Hoster"
+            "- Heart of Enmity Hoster\n"
+            "- Titus Ping\n"
+            "- Elder Primadon Ping\n"
+            "- Heart of Enmity Ping"
         )
 
 
 
 async def setup(bot):
-    await bot.add_cog(Setup(bot))
+
+    await bot.add_cog(
+        Setup(bot)
+    )

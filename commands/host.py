@@ -10,27 +10,33 @@ from utils.permissions import create_carry_role
 
 
 BOSSES = {
+
     "Titus": {
-        "role": "Titus Hoster",
+        "hoster": "Titus Hoster",
+        "ping": "Titus Ping",
         "max": 6,
         "min": 1
     },
 
     "Elder Primadon": {
-        "role": "Elder Primadon Hoster",
+        "hoster": "Elder Primadon Hoster",
+        "ping": "Elder Primadon Ping",
         "max": 10,
         "min": 1
     },
 
     "Heart of Enmity": {
-        "role": "Heart of Enmity Hoster",
+        "hoster": "Heart of Enmity Hoster",
+        "ping": "Heart of Enmity Ping",
         "max": 10,
         "min": 5
     }
+
 }
 
 
 def generate_id():
+
     return "".join(
         random.choices(
             string.ascii_uppercase + string.digits,
@@ -42,7 +48,9 @@ def generate_id():
 class Host(commands.Cog):
 
     def __init__(self, bot):
+
         self.bot = bot
+
 
 
     @app_commands.command(
@@ -53,65 +61,88 @@ class Host(commands.Cog):
         boss="Choose boss"
     )
     @app_commands.choices(
+
         boss=[
+
             app_commands.Choice(
                 name="Titus",
                 value="Titus"
             ),
+
             app_commands.Choice(
                 name="Elder Primadon",
                 value="Elder Primadon"
             ),
+
             app_commands.Choice(
                 name="Heart of Enmity",
                 value="Heart of Enmity"
             )
+
         ]
     )
+
+
     async def host(
         self,
         interaction: discord.Interaction,
         boss: app_commands.Choice[str]
     ):
 
+
         guild = interaction.guild
         user = interaction.user
 
-        selected = BOSSES[boss.value]
+
+        data = BOSSES[boss.value]
 
 
-        required_role = discord.utils.get(
+        # Check host role
+
+        host_role = discord.utils.get(
             guild.roles,
-            name=selected["role"]
+            name=data["hoster"]
         )
 
 
-        if required_role not in user.roles:
+        if host_role not in user.roles:
 
             await interaction.response.send_message(
-                f"Missing role: {selected['role']}",
+                f"You need {data['hoster']} role.",
                 ephemeral=True
             )
+
             return
 
 
-        await interaction.response.defer(
-            ephemeral=True
-        )
+
+        await interaction.response.defer()
+
 
 
         carry_id = generate_id()
 
 
-        while hasattr(self.bot, "carries") and carry_id in self.bot.carries:
+        if not hasattr(self.bot, "carries"):
+
+            self.bot.carries = {}
+
+
+
+        while carry_id in self.bot.carries:
+
             carry_id = generate_id()
 
 
+
+        # create stage
 
         stage = await guild.create_stage_channel(
             name=f"carry-{carry_id}"
         )
 
+
+        # create temporary carry role
 
         carry_role = await create_carry_role(
             guild,
@@ -119,11 +150,9 @@ class Host(commands.Cog):
         )
 
 
-        if not hasattr(self.bot, "carries"):
-            self.bot.carries = {}
-
 
         self.bot.carries[carry_id] = {
+
 
             "id": carry_id,
 
@@ -133,53 +162,83 @@ class Host(commands.Cog):
 
             "host": user.id,
 
-            "role": carry_role.id,
 
             "stage": stage.id,
 
-            "max": selected["max"],
+            "role": carry_role.id,
 
-            "min": selected["min"],
+
+            "max": data["max"],
+
+            "min": data["min"],
+
 
             "active": [],
 
             "waiting": [],
 
+
             "joined": [],
 
             "left": [],
 
+
             "message": None,
 
             "channel": None
+
         }
 
 
+
+        # boss ping role
+
+        ping_role = discord.utils.get(
+            guild.roles,
+            name=data["ping"]
+        )
+
+
+        mention = ""
+
+        if ping_role:
+
+            mention = ping_role.mention
+
+
+
         embed = discord.Embed(
+
             title=f"{boss.value} Carry",
+
             description=f"""
+
 Carry ID:
 `{carry_id}`
+
 
 Host:
 {user.mention}
 
 
-Active (0/{selected["max"]})
+Active (0/{data['max']})
 
-1. -
-2. -
-3. -
-4. -
-5. -
-6. -
+① —
+② —
+③ —
+④ —
+⑤ —
+⑥ —
 
 
 Waiting (0)
 
+
 Status:
 Open
+
 """
+
         )
 
 
@@ -192,7 +251,7 @@ Open
         if channel is None:
 
             await interaction.followup.send(
-                "Missing #carry-hosts channel. Run /setup first.",
+                "carry-hosts channel missing. Run /setup.",
                 ephemeral=True
             )
 
@@ -201,22 +260,32 @@ Open
 
 
         message = await channel.send(
+
+            content=mention,
+
             embed=embed,
+
             view=CarryButtons(
                 self.bot,
                 carry_id
             )
+
         )
 
 
+
         self.bot.carries[carry_id]["message"] = message.id
+
         self.bot.carries[carry_id]["channel"] = channel.id
 
 
 
         await interaction.followup.send(
-            f"Carry created: `{carry_id}`",
+
+            f"Carry created.\nID: `{carry_id}`",
+
             ephemeral=True
+
         )
 
 
