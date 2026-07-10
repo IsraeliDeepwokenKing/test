@@ -331,18 +331,16 @@ Open
 
 
 
-        await interaction.followup.send(
-
-            f"Carry created.\nID: `{carry_id}`",
-
-            ephemeral=True
-
-        )
-
-
-
-async def setup(bot):
-
-    await bot.add_cog(
-        Host(bot)
+message = await channel.send(
+    content=ping,
+    embed=embed,
+    view=CarryButtons(
+        self.bot,
+        carry_id
     )
+)
+
+self.bot.carries[carry_id]["message"] = message.id
+self.bot.carries[carry_id]["channel"] = channel.id
+
+return
