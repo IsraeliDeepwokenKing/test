@@ -18,16 +18,16 @@ BOSSES = {
         "min": 1
     },
 
-    "Elder Primadon": {
-        "hoster": "Elder Primadon Hoster",
-        "ping": "Elder Primadon Ping",
+    "Elder": {
+        "hoster": "Elder Hoster",
+        "ping": "Elder Ping",
         "max": 10,
         "min": 1
     },
 
-    "Heart of Enmity": {
-        "hoster": "Heart of Enmity Hoster",
-        "ping": "Heart of Enmity Ping",
+    "Enmity": {
+        "hoster": "Enmity Hoster",
+        "ping": "Enmity Ping",
         "max": 10,
         "min": 5
     }
@@ -48,7 +48,6 @@ def generate_id():
 class Host(commands.Cog):
 
     def __init__(self, bot):
-
         self.bot = bot
 
 
@@ -58,7 +57,8 @@ class Host(commands.Cog):
         description="Create a Deepwoken boss carry"
     )
     @app_commands.describe(
-        boss="Choose boss"
+        boss="Choose boss",
+        players="Maximum players for this carry"
     )
     @app_commands.choices(
 
@@ -70,23 +70,24 @@ class Host(commands.Cog):
             ),
 
             app_commands.Choice(
-                name="Elder Primadon",
-                value="Elder Primadon"
+                name="Elder",
+                value="Elder"
             ),
 
             app_commands.Choice(
-                name="Heart of Enmity",
-                value="Heart of Enmity"
+                name="Enmity",
+                value="Enmity"
             )
 
         ]
-    )
 
+    )
 
     async def host(
         self,
         interaction: discord.Interaction,
-        boss: app_commands.Choice[str]
+        boss: app_commands.Choice[str],
+        players: int
     ):
 
 
@@ -97,18 +98,43 @@ class Host(commands.Cog):
         data = BOSSES[boss.value]
 
 
+
         # Check host role
 
-        host_role = discord.utils.get(
+        role = discord.utils.get(
             guild.roles,
             name=data["hoster"]
         )
 
 
-        if host_role not in user.roles:
+        if role not in user.roles:
 
             await interaction.response.send_message(
                 f"You need {data['hoster']} role.",
+                ephemeral=True
+            )
+
+            return
+
+
+
+        # Player limit
+
+        if players < data["min"]:
+
+            await interaction.response.send_message(
+                f"{boss.value} requires at least {data['min']} players.",
+                ephemeral=True
+            )
+
+            return
+
+
+
+        if players > data["max"]:
+
+            await interaction.response.send_message(
+                f"{boss.value} maximum is {data['max']} players.",
                 ephemeral=True
             )
 
@@ -123,6 +149,7 @@ class Host(commands.Cog):
         carry_id = generate_id()
 
 
+
         if not hasattr(self.bot, "carries"):
 
             self.bot.carries = {}
@@ -135,14 +162,22 @@ class Host(commands.Cog):
 
 
 
-        # create stage
+        # Stage
 
-        stage = await guild.create_stage_channel(
-            name=f"carry-{carry_id}"
+        stage_name = (
+            f"{boss.value.lower()}-"
+            f"{user.name.lower()}-"
+            f"{carry_id}"
         )
 
 
-        # create temporary carry role
+        stage = await guild.create_stage_channel(
+            name=stage_name
+        )
+
+
+
+        # Carry role
 
         carry_role = await create_carry_role(
             guild,
@@ -163,14 +198,15 @@ class Host(commands.Cog):
             "host": user.id,
 
 
-            "stage": stage.id,
-
             "role": carry_role.id,
 
+            "stage": stage.id,
 
-            "max": data["max"],
+
+            "max": players,
 
             "min": data["min"],
+
 
 
             "active": [],
@@ -178,9 +214,11 @@ class Host(commands.Cog):
             "waiting": [],
 
 
-            "joined": [],
 
-            "left": [],
+            "join_log": [],
+
+            "leave_log": [],
+
 
 
             "message": None,
@@ -191,19 +229,17 @@ class Host(commands.Cog):
 
 
 
-        # boss ping role
-
         ping_role = discord.utils.get(
             guild.roles,
             name=data["ping"]
         )
 
 
-        mention = ""
+        ping = ""
 
         if ping_role:
 
-            mention = ping_role.mention
+            ping = ping_role.mention
 
 
 
@@ -221,17 +257,31 @@ Host:
 {user.mention}
 
 
-Active (0/{data['max']})
-
-① —
-② —
-③ —
-④ —
-⑤ —
-⑥ —
+Players:
+0/{players}
 
 
-Waiting (0)
+Active
+
+① -
+② -
+③ -
+④ -
+⑤ -
+⑥ -
+⑦ -
+⑧ -
+⑨ -
+⑩ -
+
+
+Waiting
+
+None
+
+
+Stage:
+{stage.mention}
 
 
 Status:
@@ -240,6 +290,7 @@ Open
 """
 
         )
+
 
 
         channel = discord.utils.get(
@@ -251,7 +302,7 @@ Open
         if channel is None:
 
             await interaction.followup.send(
-                "carry-hosts channel missing. Run /setup.",
+                "Missing carry-hosts channel. Run /setup.",
                 ephemeral=True
             )
 
@@ -261,7 +312,7 @@ Open
 
         message = await channel.send(
 
-            content=mention,
+            content=ping,
 
             embed=embed,
 

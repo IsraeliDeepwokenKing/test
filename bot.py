@@ -1,13 +1,19 @@
 import asyncio
 import discord
+
 from discord.ext import commands
 from aiohttp import web
 
 from config import TOKEN
 
 
+
 intents = discord.Intents.default()
+
 intents.members = True
+intents.guilds = True
+intents.message_content = True
+
 
 
 bot = commands.Bot(
@@ -16,77 +22,150 @@ bot = commands.Bot(
 )
 
 
+
+# =====================
+# LOAD COMMANDS
+# =====================
+
 async def load_extensions():
 
-    await bot.load_extension(
-        "commands.setup"
-    )
+    extensions = [
 
-    await bot.load_extension(
-        "commands.host"
-    )
+        "commands.setup",
+        "commands.host",
+        "commands.endcarry"
+
+    ]
+
+
+    for extension in extensions:
+
+        try:
+
+            await bot.load_extension(
+                extension
+            )
+
+            print(
+                f"Loaded {extension}"
+            )
+
+
+        except Exception as e:
+
+            print(
+                f"Failed loading {extension}: {e}"
+            )
+
+
+
+
+# =====================
+# DISCORD EVENTS
+# =====================
 
 
 @bot.event
 async def on_ready():
 
-    print(f"Bot online: {bot.user}")
+    print(
+        f"Bot online: {bot.user}"
+    )
+
 
     try:
+
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} commands")
+
+        print(
+            f"Synced {len(synced)} slash commands"
+        )
+
 
     except Exception as e:
-        print(e)
+
+        print(
+            f"Command sync error: {e}"
+        )
 
 
 
-# Render web server
+# =====================
+# RENDER WEB SERVER
+# =====================
+
 
 async def health(request):
 
     return web.Response(
+
         text="Deepwoken Carry Bot Online"
+
     )
+
+
 
 
 async def start_web_server():
 
     app = web.Application()
 
+
     app.router.add_get(
         "/",
         health
     )
 
-    runner = web.AppRunner(app)
+
+    runner = web.AppRunner(
+        app
+    )
+
 
     await runner.setup()
 
 
-    port = 10000
 
     site = web.TCPSite(
+
         runner,
+
         "0.0.0.0",
-        port
+
+        10000
+
     )
+
 
     await site.start()
 
+
     print(
-        f"Web server running on {port}"
+        "Web server running on port 10000"
     )
 
+
+
+
+
+# =====================
+# MAIN
+# =====================
 
 
 async def main():
 
     await load_extensions()
 
+
     await start_web_server()
 
-    await bot.start(TOKEN)
+
+    await bot.start(
+        TOKEN
+    )
+
+
 
 
 
