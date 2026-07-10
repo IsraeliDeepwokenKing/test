@@ -10,7 +10,6 @@ from utils.permissions import remove_carry_role
 class EndCarry(commands.Cog):
 
     def __init__(self, bot):
-
         self.bot = bot
 
 
@@ -35,13 +34,12 @@ class EndCarry(commands.Cog):
                 "No active carries.",
                 ephemeral=True
             )
-
             return
 
 
 
         carry = self.bot.carries.get(
-            carry_id
+            carry_id.upper()
         )
 
 
@@ -77,13 +75,14 @@ class EndCarry(commands.Cog):
 
 
 
+        # Remove player roles
+
         role = guild.get_role(
             carry["role"]
         )
 
 
         if role:
-
 
             for uid in carry["active"]:
 
@@ -98,53 +97,90 @@ class EndCarry(commands.Cog):
 
 
 
-        if carry["message"]:
+        # Delete carry message
 
+        try:
 
             channel = guild.get_channel(
                 carry["channel"]
             )
 
+
             if channel:
 
-                try:
+                message = await channel.fetch_message(
+                    carry["message"]
+                )
 
-                    msg = await channel.fetch_message(
-                        carry["message"]
-                    )
-
-                    await msg.delete()
-
-                except:
-
-                    pass
+                await message.delete()
 
 
+        except Exception as e:
 
-
-        stage = guild.get_channel(
-            carry["stage"]
-        )
-
-        if stage:
-
-            await stage.delete()
+            print(
+                "Message delete error:",
+                e
+            )
 
 
 
-        if role:
+        # Delete stage
 
-            await role.delete()
+        try:
+
+            stage = guild.get_channel(
+                carry["stage"]
+            )
+
+
+            if stage:
+
+                await stage.delete(
+                    reason="Carry ended"
+                )
+
+
+        except Exception as e:
+
+            print(
+                "Stage delete error:",
+                e
+            )
 
 
 
-        del self.bot.carries[carry_id]
+        # Delete temporary role
+
+        try:
+
+            if role:
+
+                await role.delete(
+                    reason="Carry ended"
+                )
+
+
+        except Exception as e:
+
+            print(
+                "Role delete error:",
+                e
+            )
+
+
+
+        # Clear memory
+
+        del self.bot.carries[carry_id.upper()]
 
 
 
         await interaction.followup.send(
-            f"Carry `{carry_id}` ended.",
+
+            f"Carry `{carry_id.upper()}` has been deleted.",
+
             ephemeral=True
+
         )
 
 
