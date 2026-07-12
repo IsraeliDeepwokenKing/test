@@ -5,7 +5,12 @@ from discord.ext import commands
 from aiohttp import web
 
 from config import TOKEN
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 
 intents = discord.Intents.default()

@@ -382,9 +382,6 @@ class Host(commands.Cog):
 
         return
     async def setup(bot):
-
     await bot.add_cog(
-
         Host(bot)
-
     )
