@@ -1,11 +1,9 @@
 import asyncio
-import discord
-import traceback
-from discord.ext import commands
-from aiohttp import web
-
-from config import TOKEN
 import os
+
+import discord
+from aiohttp import web
+from discord.ext import commands
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -33,20 +31,24 @@ bot = commands.Bot(
 # =====================
 
 async def load_extensions():
-    extensions = [
-    "commands.setup",
-    "commands.host",
-    "commands.endcarry"
-]
 
-for extension in extensions:
-    try:
-        bot.load_extension(extension)
-        print(f"Loaded {extension}")
-    except Exception:
-        import traceback
-        print(f"Failed loading {extension}")
-        traceback.print_exc()
+    extensions = [
+        "commands.setup",
+        "commands.host",
+        "commands.endcarry"
+    ]
+
+    import traceback
+
+    for extension in extensions:
+
+        try:
+            await bot.load_extension(extension)
+            print(f"✅ Loaded {extension}")
+
+        except Exception:
+            print(f"\n❌ FAILED TO LOAD: {extension}")
+            traceback.print_exc()
 
 
 # =====================
