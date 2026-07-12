@@ -1,6 +1,6 @@
 import asyncio
 import discord
-
+import traceback
 from discord.ext import commands
 from aiohttp import web
 
@@ -33,35 +33,20 @@ bot = commands.Bot(
 # =====================
 
 async def load_extensions():
-
     extensions = [
+    "commands.setup",
+    "commands.host",
+    "commands.endcarry"
+]
 
-        "commands.setup",
-        "commands.host",
-        "commands.endcarry"
+for extension in extensions:
+    try:
+        await bot.load_extension(extension)
+        print(f"Loaded {extension}")
 
-    ]
-
-
-    for extension in extensions:
-
-        try:
-
-            await bot.load_extension(
-                extension
-            )
-
-            print(
-                f"Loaded {extension}"
-            )
-
-
-        except Exception as e:
-            import traceback
-
-print(f"Failed loading {extension}")
-traceback.print_exc()
-
+    except Exception:
+        print(f"Failed loading {extension}")
+        traceback.print_exc()
 
 
 
