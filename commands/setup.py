@@ -12,7 +12,7 @@ class Setup(commands.Cog):
 
     @app_commands.command(
         name="setup",
-        description="Postavlja CarryBot."
+        description="Sets up carry system"
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def setup(
@@ -171,7 +171,7 @@ class Setup(commands.Cog):
 
         await interaction.followup.send(
 
-            "Setup uspješno završen.",
+            "Setup has finished.",
 
             ephemeral=True
 
