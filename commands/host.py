@@ -381,7 +381,5 @@ class Host(commands.Cog):
         # u carry-pings kanalu.
 
         return
-    async def setup(bot):
-    await bot.add_cog(
-        Host(bot)
-    )
+async def setup(bot):
+    await bot.add_cog(Host(bot))
