@@ -1,395 +1,289 @@
-import discord
+import json
+import random
+import string
+import time
 
-from discord.ui import View, Button
+from database import db
 
-from managers.carry_manager import carry_manager
-from managers.queue_manager import queue_manager
-from managers.embed_manager import embed_manager
-from managers.stage_manager import stage_manager
-from managers.log_manager import log_manager
-from managers.blacklist_manager import blacklist_manager
 
-from utils.permissions import permission_manager
+class CarryManager:
 
+    def generate_id(self):
 
-class JoinButton(Button):
+        while True:
 
-    def __init__(self, carry_id: str):
-
-        super().__init__(
-
-            label="Join",
-
-            style=discord.ButtonStyle.green,
-
-            custom_id=f"join:{carry_id}"
-
-        )
-
-        self.carry_id = carry_id
-
-
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        carry = carry_manager.get(
-            self.carry_id
-        )
-
-        if carry is None:
-
-            await interaction.response.send_message(
-
-                "Carry više ne postoji.",
-
-                ephemeral=True
-
-            )
-
-            return
-
-        # ------------------------
-        # HOST NE MOŽE JOINATI
-        # ------------------------
-
-        if interaction.user.id == carry["host_id"]:
-
-            await interaction.response.send_message(
-
-                "Ne možeš se pridružiti vlastitom carryju.",
-
-                ephemeral=True
-
-            )
-
-            return
-
-        # ------------------------
-        # BLACKLIST
-        # ------------------------
-
-        if blacklist_manager.is_blacklisted(
-
-            carry["host_id"],
-
-            interaction.user.id
-
-        ):
-
-            await interaction.response.send_message(
-
-                "Host te je blacklistao.",
-
-                ephemeral=True
-
-            )
-
-            return
-
-        # ------------------------
-        # JOIN
-        # ------------------------
-
-        success, location = queue_manager.join(
-
-            self.carry_id,
-
-            interaction.user.id
-
-        )
-
-        if not success:
-
-            await interaction.response.send_message(
-
-                location,
-
-                ephemeral=True
-
-            )
-
-            return
-                # ------------------------
-        # LOG
-        # ------------------------
-
-        if location == "active":
-
-            log_manager.add(
-
-                self.carry_id,
-
-                interaction.user.id,
-
-                "join_active"
-
-            )
-
-        else:
-
-            log_manager.add(
-
-                self.carry_id,
-
-                interaction.user.id,
-
-                "join_waiting"
-
-            )
-
-
-        # ------------------------
-        # GIVE CARRY ROLE
-        # ------------------------
-
-        carry = carry_manager.get(
-            self.carry_id
-        )
-
-        role = interaction.guild.get_role(
-            carry["role_id"]
-        )
-
-        if role:
-
-            await permission_manager.give_carry_role(
-
-                interaction.user,
-
-                role
-
-            )
-
-
-        # ------------------------
-        # UPDATE STAGE
-        # ------------------------
-
-        await stage_manager.sync_permissions(
-
-            interaction.guild,
-
-            self.carry_id
-
-        )
-
-
-        # ------------------------
-        # UPDATE EMBED
-        # ------------------------
-
-        await embed_manager.update_message(
-
-            interaction.guild,
-
-            self.carry_id
-
-        )
-
-
-        # ------------------------
-        # RESPONSE
-        # ------------------------
-
-        if location == "active":
-
-            msg = "Dodan si u Active listu."
-
-        else:
-
-            msg = "Active je pun. Dodan si u Waiting listu."
-
-
-        await interaction.response.send_message(
-
-            msg,
-
-            ephemeral=True
-
-        )
-        class LeaveButton(Button):
-
-    def __init__(self, carry_id: str):
-
-        super().__init__(
-
-            label="Leave",
-
-            style=discord.ButtonStyle.red,
-
-            custom_id=f"leave:{carry_id}"
-
-        )
-
-        self.carry_id = carry_id
-
-
-    async def callback(
-        self,
-        interaction: discord.Interaction
-    ):
-
-        carry = carry_manager.get(
-            self.carry_id
-        )
-
-        if carry is None:
-
-            await interaction.response.send_message(
-
-                "Carry više ne postoji.",
-
-                ephemeral=True
-
-            )
-
-            return
-
-
-        # ------------------------
-        # LEAVE
-        # ------------------------
-
-        success, promoted = queue_manager.leave(
-
-            self.carry_id,
-
-            interaction.user.id
-
-        )
-
-        if not success:
-
-            await interaction.response.send_message(
-
-                promoted,
-
-                ephemeral=True
-
-            )
-
-            return
-
-
-        # ------------------------
-        # REMOVE ROLE
-        # ------------------------
-
-        role = interaction.guild.get_role(
-            carry["role_id"]
-        )
-
-        if role:
-
-            await permission_manager.remove_carry_role(
-
-                interaction.user,
-
-                role
-
-            )
-
-
-        # ------------------------
-        # LOG LEAVE
-        # ------------------------
-
-        log_manager.add(
-
-            self.carry_id,
-
-            interaction.user.id,
-
-            "leave"
-
-        )
-
-
-        # ------------------------
-        # PROMOTION
-        # ------------------------
-
-        if promoted is not None:
-
-            promoted_member = interaction.guild.get_member(
-                promoted
-            )
-
-            if promoted_member:
-
-                if role:
-
-                    await permission_manager.give_carry_role(
-
-                        promoted_member,
-
-                        role
-
-                    )
-
-                log_manager.add(
-
-                    self.carry_id,
-
-                    promoted,
-
-                    "promoted"
-
+            carry_id = "".join(
+                random.choices(
+                    string.ascii_uppercase + string.digits,
+                    k=6
                 )
+            )
 
+            row = db.cursor.execute(
+                """
+                SELECT carry_id
+                FROM carries
+                WHERE carry_id=?
+                """,
+                (carry_id,)
+            ).fetchone()
 
-        # ------------------------
-        # UPDATE STAGE
-        # ------------------------
+            if row is None:
+                return carry_id
 
-        await stage_manager.sync_permissions(
+    def create(
+        self,
+        carry_id: str,
+        guild_id: int,
+        host_id: int,
+        boss: str,
+        max_players: int,
+        stage_id: int,
+        message_id: int,
+        channel_id: int,
+        role_id: int
+    ):
 
-            interaction.guild,
-
-            self.carry_id
-
+        db.cursor.execute(
+            """
+            INSERT INTO carries
+            (
+                carry_id,
+                guild_id,
+                host_id,
+                boss,
+                max_players,
+                stage_id,
+                message_id,
+                channel_id,
+                role_id,
+                active,
+                waiting,
+                created
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                carry_id,
+                guild_id,
+                host_id,
+                boss,
+                max_players,
+                stage_id,
+                message_id,
+                channel_id,
+                role_id,
+                json.dumps([]),
+                json.dumps([]),
+                int(time.time())
+            )
         )
 
+        db.conn.commit()
 
-        # ------------------------
-        # UPDATE EMBED
-        # ------------------------
+    def get(self, carry_id: str):
 
-        await embed_manager.update_message(
+        row = db.cursor.execute(
+            """
+            SELECT *
+            FROM carries
+            WHERE carry_id=?
+            """,
+            (carry_id,)
+        ).fetchone()
 
-            interaction.guild,
+        if row is None:
+            return None
 
-            self.carry_id
+        return {
+            "carry_id": row[0],
+            "guild_id": row[1],
+            "host_id": row[2],
+            "boss": row[3],
+            "max_players": row[4],
+            "stage_id": row[5],
+            "message_id": row[6],
+            "channel_id": row[7],
+            "role_id": row[8],
+            "active": json.loads(row[9]),
+            "waiting": json.loads(row[10]),
+            "created": row[11]
+        }
 
+    def update_lists(
+        self,
+        carry_id: str,
+        active: list,
+        waiting: list
+    ):
+
+        db.cursor.execute(
+            """
+            UPDATE carries
+            SET active=?, waiting=?
+            WHERE carry_id=?
+            """,
+            (
+                json.dumps(active),
+                json.dumps(waiting),
+                carry_id
+            )
         )
 
+        db.conn.commit()
 
-        # ------------------------
-        # RESPONSE
-        # ------------------------
+    def set_message(
+        self,
+        carry_id: str,
+        message_id: int
+    ):
 
-        await interaction.response.send_message(
-
-            "Napustio si carry.",
-
-            ephemeral=True
-
-        )
-        class CarryButtons(View):
-
-    def __init__(self, bot, carry_id: str):
-
-        super().__init__(timeout=None)
-
-        self.bot = bot
-        self.carry_id = carry_id
-
-        self.add_item(
-            JoinButton(carry_id)
+        db.cursor.execute(
+            """
+            UPDATE carries
+            SET message_id=?
+            WHERE carry_id=?
+            """,
+            (
+                message_id,
+                carry_id
+            )
         )
 
-        self.add_item(
-            LeaveButton(carry_id)
+        db.conn.commit()
+
+    def set_stage(
+        self,
+        carry_id: str,
+        stage_id: int
+    ):
+
+        db.cursor.execute(
+            """
+            UPDATE carries
+            SET stage_id=?
+            WHERE carry_id=?
+            """,
+            (
+                stage_id,
+                carry_id
+            )
         )
+
+        db.conn.commit()
+
+    def set_role(
+        self,
+        carry_id: str,
+        role_id: int
+    ):
+
+        db.cursor.execute(
+            """
+            UPDATE carries
+            SET role_id=?
+            WHERE carry_id=?
+            """,
+            (
+                role_id,
+                carry_id
+            )
+        )
+
+        db.conn.commit()
+
+    def get_by_host(
+        self,
+        host_id: int
+    ):
+
+        row = db.cursor.execute(
+            """
+            SELECT carry_id
+            FROM carries
+            WHERE host_id=?
+            """,
+            (host_id,)
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return self.get(row[0])
+
+    def get_by_message(
+        self,
+        message_id: int
+    ):
+
+        row = db.cursor.execute(
+            """
+            SELECT carry_id
+            FROM carries
+            WHERE message_id=?
+            """,
+            (message_id,)
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return self.get(row[0])
+
+    def host_has_carry(
+        self,
+        host_id: int
+    ):
+
+        row = db.cursor.execute(
+            """
+            SELECT 1
+            FROM carries
+            WHERE host_id=?
+            """,
+            (host_id,)
+        ).fetchone()
+
+        return row is not None
+
+    def player_count(
+        self,
+        carry_id: str
+    ):
+
+        carry = self.get(carry_id)
+
+        if carry is None:
+            return 0
+
+        return len(carry["active"])
+
+    def is_full(
+        self,
+        carry_id: str
+    ):
+
+        carry = self.get(carry_id)
+
+        if carry is None:
+            return False
+
+        return len(carry["active"]) >= carry["max_players"]
+
+    def delete(
+        self,
+        carry_id: str
+    ):
+
+        db.cursor.execute(
+            """
+            DELETE FROM carries
+            WHERE carry_id=?
+            """,
+            (carry_id,)
+        )
+
+        db.conn.commit()
+
+
+carry_manager = CarryManager()
