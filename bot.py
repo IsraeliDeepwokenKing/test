@@ -41,13 +41,12 @@ async def load_extensions():
 
 for extension in extensions:
     try:
-        await bot.load_extension(extension)
+        bot.load_extension(extension)
         print(f"Loaded {extension}")
-
     except Exception:
+        import traceback
         print(f"Failed loading {extension}")
         traceback.print_exc()
-
 
 
 # =====================
