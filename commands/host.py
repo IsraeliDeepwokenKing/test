@@ -1,65 +1,55 @@
 import discord
-import random
-import string
-
 from discord import app_commands
 from discord.ext import commands
 
+from managers.host_manager import host_manager
+from managers.carry_manager import carry_manager
+from managers.log_manager import log_manager
+from utils.permissions import permission_manager
+
 from views.carry_buttons import CarryButtons
-from utils.permissions import create_carry_role
 
 
 BOSSES = {
 
     "Titus": {
-        "hoster": "Titus Hoster",
-        "ping": "Titus Ping",
-        "max": 6,
-        "min": 1
+        "minimum": 1,
+        "maximum": 6
     },
 
     "Elder": {
-        "hoster": "Elder Hoster",
-        "ping": "Elder Ping",
-        "max": 10,
-        "min": 1
+        "minimum": 1,
+        "maximum": 1
     },
 
     "Enmity": {
-        "hoster": "Enmity Hoster",
-        "ping": "Enmity Ping",
-        "max": 10,
-        "min": 5
+        "minimum": 5,
+        "maximum": 10
     }
 
 }
 
 
-def generate_id():
-
-    return "".join(
-        random.choices(
-            string.ascii_uppercase + string.digits,
-            k=6
-        )
-    )
-
-
 class Host(commands.Cog):
 
     def __init__(self, bot):
-        self.bot = bot
 
+        self.bot = bot
 
 
     @app_commands.command(
         name="host",
-        description="Create a Deepwoken boss carry"
+        description="Start new carry."
     )
+
     @app_commands.describe(
-        boss="Choose boss",
-        players="Maximum players for this carry"
+
+        boss="Which boss?",
+
+        players="How many players?"
+
     )
+
     @app_commands.choices(
 
         boss=[
@@ -84,156 +74,161 @@ class Host(commands.Cog):
     )
 
     async def host(
+
         self,
+
         interaction: discord.Interaction,
+
         boss: app_commands.Choice[str],
-        players: int
+
+        players: app_commands.Range[int, 1, 10]
+
     ):
 
+        await interaction.response.defer(
+            ephemeral=True
+        )
 
         guild = interaction.guild
-        user = interaction.user
 
+        member = interaction.user
 
-        data = BOSSES[boss.value]
+        boss_name = boss.value
+                # -----------------------------
+        # VALIDACIJA BROJA IGRAČA
+        # -----------------------------
 
+        boss_data = BOSSES[boss_name]
 
+        if players < boss_data["minimum"]:
 
-        # Check host role
+            await interaction.followup.send(
 
-        role = discord.utils.get(
-            guild.roles,
-            name=data["hoster"]
-        )
+                f"Min amount of players for **{boss_name}** is **{boss_data['minimum']}**.",
 
-
-        if role not in user.roles:
-
-            await interaction.response.send_message(
-                f"You need {data['hoster']} role.",
                 ephemeral=True
+
             )
 
             return
 
 
+        if players > boss_data["maximum"]:
 
-        # Player limit
+            await interaction.followup.send(
 
-        if players < data["min"]:
+                f"Max amount of players for **{boss_name}** is **{boss_data['maximum']}**.",
 
-            await interaction.response.send_message(
-                f"{boss.value} requires at least {data['min']} players.",
                 ephemeral=True
+
             )
 
             return
 
 
+        # -----------------------------
+        # HOST ROLE
+        # -----------------------------
 
-        if players > data["max"]:
+        if not permission_manager.has_host_role(
+            member,
+            boss_name
+        ):
 
-            await interaction.response.send_message(
-                f"{boss.value} maximum is {data['max']} players.",
+            await interaction.followup.send(
+
+                "You dont have the needed role.",
+
                 ephemeral=True
+
             )
 
             return
 
 
+        # -----------------------------
+        # VEĆ POSTOJI CARRY
+        # -----------------------------
 
-        await interaction.response.defer()
+        if carry_manager.host_has_carry(
+            member.id
+        ):
 
+            await interaction.followup.send(
 
+                "You are already hosting a carry.",
 
-        carry_id = generate_id()
+                ephemeral=True
 
+            )
 
-
-        if not hasattr(self.bot, "carries"):
-
-            self.bot.carries = {}
-
-
-
-        while carry_id in self.bot.carries:
-
-            carry_id = generate_id()
-
+            return
 
 
-        # Stage
+        # -----------------------------
+        # CARRY PINGS CHANNEL
+        # -----------------------------
 
-        stage_name = (
-            f"{boss.value.lower()}-"
-            f"{user.name.lower()}-"
-            f"{carry_id}"
+        ping_channel = discord.utils.get(
+
+            guild.text_channels,
+
+            name="carry-pings"
+
         )
 
+        if ping_channel is None:
 
-        stage = await guild.create_stage_channel(
-            name=stage_name
-        )
+            await interaction.followup.send(
+
+                "Missing ping channel, use /setup command.",
+
+                ephemeral=True
+
+            )
+
+            return
 
 
+        # -----------------------------
+        # CREATE HOST
+        # -----------------------------
 
-        # Carry role
+        try:
 
-        carry_role = await create_carry_role(
+            carry_id, carry_role, stage = await host_manager.create_host(
+
+                guild,
+
+                member,
+
+                boss_name,
+
+                players,
+
+                ping_channel
+
+            )
+
+        except Exception as e:
+
+            await interaction.followup.send(
+
+                str(e),
+
+                ephemeral=True
+
+            )
+
+            return
+                # -----------------------------
+        # PING ROLE
+        # -----------------------------
+
+        ping_role = permission_manager.get_ping_role(
             guild,
-            carry_id
+            boss_name
         )
-
-
-
-        self.bot.carries[carry_id] = {
-
-
-            "id": carry_id,
-
-            "guild": guild.id,
-
-            "boss": boss.value,
-
-            "host": user.id,
-
-
-            "role": carry_role.id,
-
-            "stage": stage.id,
-
-
-            "max": players,
-
-            "min": data["min"],
-
-
-
-            "active": [],
-
-            "waiting": [],
-
-
-
-            "join_log": [],
-
-            "leave_log": [],
-
-
-
-            "message": None,
-
-            "channel": None
-
-        }
-
-
-
-        ping_role = discord.utils.get(
-            guild.roles,
-            name=data["ping"]
-        )
-
 
         ping = ""
 
@@ -242,75 +237,81 @@ class Host(commands.Cog):
             ping = ping_role.mention
 
 
+        # -----------------------------
+        # ACTIVE LIST
+        # -----------------------------
+
+        active = ""
+
+        for i in range(players):
+
+            active += f"{i + 1}. —\n"
+
+
+        # -----------------------------
+        # EMBED
+        # -----------------------------
 
         embed = discord.Embed(
 
-            title=f"{boss.value} Carry",
+            title=f"{boss_name} Carry",
 
-            description=f"""
+            colour=discord.Colour.blurple()
 
-Carry ID:
-`{carry_id}`
+        )
 
+        embed.add_field(
 
-Host:
-{user.mention}
+            name="Carry ID",
 
+            value=f"`{carry_id}`",
 
-Players:
-0/{players}
+            inline=False
 
+        )
 
-Active
+        embed.add_field(
 
-① -
-② -
-③ -
-④ -
-⑤ -
-⑥ -
-⑦ -
-⑧ -
-⑨ -
-⑩ -
+            name="Host",
 
+            value=member.mention,
 
-Waiting
+            inline=False
 
-None
+        )
 
+        embed.add_field(
 
-Stage:
-{stage.mention}
+            name=f"Active (0/{players})",
 
+            value=active,
 
-Status:
-Open
+            inline=False
 
-"""
+        )
+
+        embed.add_field(
+
+            name="Waiting (0)",
+
+            value="None",
+
+            inline=False
+
+        )
+
+        embed.set_footer(
+
+            text="Deepwoken CarryBot"
 
         )
 
 
+        # -----------------------------
+        # SEND MESSAGE
+        # -----------------------------
 
-        channel = discord.utils.get(
-            guild.text_channels,
-            name="carry-hosts"
-        )
-
-
-        if channel is None:
-
-            await interaction.followup.send(
-                "Missing carry-hosts channel. Run /setup.",
-                ephemeral=True
-            )
-
-            return
-
-
-
-        message = await channel.send(
+        message = await ping_channel.send(
 
             content=ping,
 
@@ -319,28 +320,71 @@ Open
             view=CarryButtons(
                 self.bot,
                 carry_id
+            ),
+
+            allowed_mentions=discord.AllowedMentions(
+                roles=True
             )
 
         )
 
 
+        # -----------------------------
+        # SAVE MESSAGE ID
+        # -----------------------------
 
-        self.bot.carries[carry_id]["message"] = message.id
+        carry_manager.set_message(
 
-        self.bot.carries[carry_id]["channel"] = channel.id
+            carry_id,
+
+            message.id
+
+        )
+                # -----------------------------
+        # LOG HOST
+        # -----------------------------
+
+        log_manager.add(
+
+            carry_id,
+
+            member.id,
+
+            "host_created"
+
+        )
 
 
+        # -----------------------------
+        # UPDATE STAGE PERMISSIONS
+        # -----------------------------
 
-message = await channel.send(
-    content=ping,
-    embed=embed,
-    view=CarryButtons(
-        self.bot,
-        carry_id
+        from managers.stage_manager import stage_manager
+
+        await stage_manager.sync_permissions(
+
+            guild,
+
+            carry_id
+
+        )
+
+
+        # -----------------------------
+        # NO SUCCESS MESSAGE
+        # -----------------------------
+
+        # Namjerno ne šaljemo
+        # "Carry created"
+
+        # Hoster će vidjeti carry
+        # u carry-pings kanalu.
+
+        return
+    async def setup(bot):
+
+    await bot.add_cog(
+
+        Host(bot)
+
     )
-)
-
-self.bot.carries[carry_id]["message"] = message.id
-self.bot.carries[carry_id]["channel"] = channel.id
-
-return

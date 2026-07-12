@@ -1,4 +1,5 @@
 import discord
+
 from discord import app_commands
 from discord.ext import commands
 
@@ -11,8 +12,9 @@ class Setup(commands.Cog):
 
     @app_commands.command(
         name="setup",
-        description="Setup Deepwoken carry system"
+        description="Postavlja CarryBot."
     )
+    @app_commands.checks.has_permissions(administrator=True)
     async def setup(
         self,
         interaction: discord.Interaction
@@ -20,27 +22,14 @@ class Setup(commands.Cog):
 
         guild = interaction.guild
 
-
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message(
-                "You need Administrator permission.",
-                ephemeral=True
-            )
-            return
-
-
         await interaction.response.defer(
             ephemeral=True
         )
-
-
-        # CATEGORY
 
         category = discord.utils.get(
             guild.categories,
             name="Deepwoken Carry"
         )
-
 
         if category is None:
 
@@ -48,116 +37,151 @@ class Setup(commands.Cog):
                 "Deepwoken Carry"
             )
 
+        channels = [
 
-        # CHANNELS
+            "host-commands",
 
-        channel_names = [
-            "carry-hosts",
+            "carry-pings",
+
             "incident-reports",
+
             "logs"
+
         ]
 
-
-        channels = {}
-
-
-        for name in channel_names:
+        for name in channels:
 
             channel = discord.utils.get(
                 guild.text_channels,
                 name=name
             )
 
+            if channel:
 
-            if channel is None:
+                continue
 
-                channel = await guild.create_text_channel(
-                    name=name,
-                    category=category
+            overwrites = {
+
+                guild.default_role:
+                discord.PermissionOverwrite(
+
+                    view_channel=True,
+
+                    send_messages=True
+
                 )
 
+            }
 
-            channels[name] = channel.id
+            # carry-pings
 
+            if name == "carry-pings":
 
+                overwrites[guild.default_role] = discord.PermissionOverwrite(
 
-        # ROLES
+                    view_channel=True,
 
-        role_names = [
+                    send_messages=False
+
+                )
+
+                overwrites[guild.me] = discord.PermissionOverwrite(
+
+                    view_channel=True,
+
+                    send_messages=True
+
+                )
+
+            # logs
+
+            elif name == "logs":
+
+                overwrites[guild.default_role] = discord.PermissionOverwrite(
+
+                    view_channel=False
+
+                )
+
+                overwrites[guild.me] = discord.PermissionOverwrite(
+
+                    view_channel=True,
+
+                    send_messages=True
+
+                )
+
+            await guild.create_text_channel(
+
+                name=name,
+
+                category=category,
+
+                overwrites=overwrites
+
+            )
+
+        roles = [
 
             "Titus Hoster",
-            "Elder Primadon Hoster",
-            "Heart of Enmity Hoster",
+
+            "Elder Hoster",
+
+            "Enmity Hoster",
 
             "Titus Ping",
-            "Elder Primadon Ping",
-            "Heart of Enmity Ping"
+
+            "Elder Ping",
+
+            "Enmity Ping"
 
         ]
 
-
-        roles = {}
-
-
-        for name in role_names:
+        for role_name in roles:
 
             role = discord.utils.get(
-                guild.roles,
-                name=name
-            )
 
+                guild.roles,
+
+                name=role_name
+
+            )
 
             if role is None:
 
-                role = await guild.create_role(
-                    name=name,
+                await guild.create_role(
+
+                    name=role_name,
+
                     mentionable=True,
-                    reason="Deepwoken carry system"
+
+                    reason="CarryBot setup"
+
                 )
 
+            else:
 
-            roles[name] = role.id
+                if not role.mentionable:
 
+                    await role.edit(
 
+                        mentionable=True
 
-        # SAVE SETTINGS
-
-        if not hasattr(self.bot, "settings"):
-
-            self.bot.settings = {}
-
-
-        self.bot.settings[guild.id] = {
-
-            "category": category.id,
-
-            "channels": channels,
-
-            "roles": roles
-
-        }
-
-
+                    )
 
         await interaction.followup.send(
-            "Setup completed.\n\n"
-            "Created channels:\n"
-            "- carry-hosts\n"
-            "- incident-reports\n"
-            "- logs\n\n"
-            "Created roles:\n"
-            "- Titus Hoster\n"
-            "- Elder Primadon Hoster\n"
-            "- Heart of Enmity Hoster\n"
-            "- Titus Ping\n"
-            "- Elder Primadon Ping\n"
-            "- Heart of Enmity Ping"
-        )
 
+            "Setup uspješno završen.",
+
+            ephemeral=True
+
+        )
 
 
 async def setup(bot):
 
     await bot.add_cog(
+
         Setup(bot)
+
     )
