@@ -1,6 +1,4 @@
 import discord
-from utils.permissions import permission_manager
-
 
 HOST_ROLES = {
     "Titus": "Titus Hoster",
@@ -37,7 +35,6 @@ class PermissionManager:
             name=role_name
         ) is not None
 
-
     # --------------------
     # PING ROLE
     # --------------------
@@ -58,7 +55,6 @@ class PermissionManager:
             name=role_name
         )
 
-
     # --------------------
     # CREATE CARRY ROLE
     # --------------------
@@ -70,17 +66,12 @@ class PermissionManager:
     ):
 
         role = await guild.create_role(
-
             name=f"carry-{carry_id}",
-
             mentionable=False,
-
             reason="Deepwoken Carry"
-
         )
 
         return role
-
 
     # --------------------
     # DELETE CARRY ROLE
@@ -91,16 +82,15 @@ class PermissionManager:
         role: discord.Role
     ):
 
-        try:
+        if role is None:
+            return
 
+        try:
             await role.delete(
                 reason="Carry ended"
             )
-
-        except Exception:
-
+        except discord.HTTPException:
             pass
-
 
     # --------------------
     # GIVE ROLE
@@ -118,7 +108,6 @@ class PermissionManager:
                 role,
                 reason="Joined carry"
             )
-
 
     # --------------------
     # REMOVE ROLE
