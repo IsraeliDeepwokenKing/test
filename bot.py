@@ -57,10 +57,10 @@ async def load_extensions():
 
 
         except Exception as e:
+            import traceback
 
-            print(
-                f"Failed loading {extension}: {e}"
-            )
+print(f"Failed loading {extension}")
+traceback.print_exc()
 
 
 
