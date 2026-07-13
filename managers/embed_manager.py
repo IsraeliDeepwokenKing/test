@@ -16,9 +16,15 @@ class EmbedManager:
         if carry is None:
             return None
 
+
+        # ------------------------
+        # HOST
+        # ------------------------
+
         host = guild.get_member(
-            carry["host_id"]
+            int(carry["host_id"])
         )
+
 
         # ------------------------
         # ACTIVE
@@ -26,33 +32,34 @@ class EmbedManager:
 
         active_lines = []
 
-        active = carry["active"]
+        active = carry.get("active", [])
 
         for slot in range(carry["max_players"]):
 
             if slot < len(active):
 
                 member = guild.get_member(
-                    active[slot]
+                    int(active[slot])
                 )
 
                 if member:
 
                     active_lines.append(
-                        f"{slot+1}. {member.mention}"
+                        f"{slot + 1}. {member.mention}"
                     )
 
                 else:
 
                     active_lines.append(
-                        f"{slot+1}. Unknown User"
+                        f"{slot + 1}. Unknown User"
                     )
 
             else:
 
                 active_lines.append(
-                    f"{slot+1}. —"
+                    f"{slot + 1}. —"
                 )
+
 
         # ------------------------
         # WAITING
@@ -60,29 +67,35 @@ class EmbedManager:
 
         waiting_lines = []
 
-        waiting = carry["waiting"]
+        waiting = carry.get("waiting", [])
+
 
         if waiting:
 
             for i, uid in enumerate(waiting):
 
-                member = guild.get_member(uid)
+                member = guild.get_member(
+                    int(uid)
+                )
 
                 if member:
 
                     waiting_lines.append(
-                        f"{i+1}. {member.mention}"
+                        f"{i + 1}. {member.mention}"
                     )
 
                 else:
 
                     waiting_lines.append(
-                        f"{i+1}. Unknown User"
+                        f"{i + 1}. Unknown User"
                     )
 
         else:
 
-            waiting_lines.append("None")
+            waiting_lines.append(
+                "None"
+            )
+
 
         # ------------------------
         # EMBED
@@ -96,6 +109,7 @@ class EmbedManager:
 
         )
 
+
         embed.add_field(
 
             name="Carry ID",
@@ -105,6 +119,7 @@ class EmbedManager:
             inline=False
 
         )
+
 
         embed.add_field(
 
@@ -116,6 +131,7 @@ class EmbedManager:
 
         )
 
+
         embed.add_field(
 
             name=f"Active ({len(active)}/{carry['max_players']})",
@@ -125,6 +141,7 @@ class EmbedManager:
             inline=False
 
         )
+
 
         embed.add_field(
 
@@ -136,16 +153,18 @@ class EmbedManager:
 
         )
 
+
         embed.set_footer(
 
             text="Deepwoken Carry"
 
         )
 
+
         return embed
 
 
-embed_manager = EmbedManager()
+
     async def update_message(
         self,
         guild: discord.Guild,
@@ -154,31 +173,45 @@ embed_manager = EmbedManager()
 
         carry = carry_manager.get(carry_id)
 
+
         if carry is None:
             return
 
+
         channel = guild.get_channel(
-            carry["channel_id"]
+            int(carry["channel_id"])
         )
+
 
         if channel is None:
             return
 
+
         try:
 
             message = await channel.fetch_message(
-                carry["message_id"]
+                int(carry["message_id"])
             )
 
-        except:
+
+        except Exception:
 
             return
+
+
 
         embed = await self.build(
             guild,
             carry_id
         )
 
-        await message.edit(
-            embed=embed
-        )
+
+        if embed:
+
+            await message.edit(
+                embed=embed
+            )
+
+
+
+embed_manager = EmbedManager()
