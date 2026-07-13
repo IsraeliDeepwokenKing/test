@@ -27,18 +27,19 @@ class StageManager:
                     speak=True,
                     request_to_speak=False
                 )
-
         }
+
 
         stage = await guild.create_stage_channel(
 
-            name="temp-stage",
+            name=f"{boss}-{carry_id}",
 
             overwrites=overwrites,
 
             reason="Deepwoken Carry"
 
         )
+
 
         return stage
 
@@ -50,7 +51,9 @@ class StageManager:
         stage_id: int
     ):
 
-        stage = guild.get_channel(stage_id)
+        stage = guild.get_channel(
+            stage_id
+        )
 
         if stage:
 
@@ -59,39 +62,57 @@ class StageManager:
 
 
     async def sync_permissions(
-        for overwrite in list(stage.overwrites):
-
-    target = overwrite
-
-    if isinstance(target, discord.Member):
-
-        if host and target.id == host.id:
-            continue
-
-        await stage.set_permissions(
-            target,
-            overwrite=None
-        )
         self,
         guild: discord.Guild,
         carry_id: str
     ):
 
-        carry = carry_manager.get(carry_id)
+        carry = carry_manager.get(
+            carry_id
+        )
+
 
         if carry is None:
             return
 
+
         stage = guild.get_channel(
-            carry["stage_id"]
+            int(carry["stage_id"])
         )
+
 
         if stage is None:
             return
 
+
+
         host = guild.get_member(
-            carry["host_id"]
+            int(carry["host_id"])
         )
+
+
+        # ------------------------
+        # RESET SVIH STARIH PERMISSIONA
+        # ------------------------
+
+        for target, overwrite in list(stage.overwrites.items()):
+
+            if isinstance(target, discord.Member):
+
+                if host and target.id == host.id:
+                    continue
+
+
+                await stage.set_permissions(
+                    target,
+                    overwrite=None
+                )
+
+
+
+        # ------------------------
+        # HOST
+        # ------------------------
 
         if host:
 
@@ -105,13 +126,18 @@ class StageManager:
 
             )
 
-        active = carry["active"]
 
-        waiting = carry["waiting"]
 
-        for uid in active:
+        # ------------------------
+        # ACTIVE PLAYERS
+        # ------------------------
 
-            member = guild.get_member(uid)
+        for uid in carry.get("active", []):
+
+            member = guild.get_member(
+                int(uid)
+            )
+
 
             if member:
 
@@ -125,9 +151,18 @@ class StageManager:
 
                 )
 
-        for uid in waiting:
 
-            member = guild.get_member(uid)
+
+        # ------------------------
+        # WAITING PLAYERS
+        # ------------------------
+
+        for uid in carry.get("waiting", []):
+
+            member = guild.get_member(
+                int(uid)
+            )
+
 
             if member:
 
