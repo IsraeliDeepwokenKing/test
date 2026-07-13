@@ -5,7 +5,6 @@ import os
 DB_FOLDER = "data"
 DB_PATH = os.path.join(DB_FOLDER, "carrybot.db")
 
-
 os.makedirs(DB_FOLDER, exist_ok=True)
 
 
@@ -21,7 +20,6 @@ class Database:
         self.cursor = self.conn.cursor()
 
         self.create_tables()
-
 
     def create_tables(self):
 
@@ -57,7 +55,6 @@ class Database:
 
         """)
 
-
         self.cursor.execute("""
 
         CREATE TABLE IF NOT EXISTS blacklist(
@@ -70,27 +67,23 @@ class Database:
 
         """)
 
-
         self.cursor.execute("""
-CREATE TABLE IF NOT EXISTS carry_logs(
 
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS carry_logs(
 
-    carry_id TEXT NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    user_id INTEGER NOT NULL,
+            carry_id TEXT NOT NULL,
 
-    action TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
 
-    timestamp INTEGER NOT NULL
+            action TEXT NOT NULL,
 
-)
-""")
+            timestamp INTEGER NOT NULL
 
         )
 
         """)
-
 
         self.conn.commit()
 
