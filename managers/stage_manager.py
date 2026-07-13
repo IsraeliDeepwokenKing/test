@@ -32,7 +32,7 @@ class StageManager:
 
         stage = await guild.create_stage_channel(
 
-            name="temp-stage"
+            name="temp-stage",
 
             overwrites=overwrites,
 
@@ -59,6 +59,19 @@ class StageManager:
 
 
     async def sync_permissions(
+        for overwrite in list(stage.overwrites):
+
+    target = overwrite
+
+    if isinstance(target, discord.Member):
+
+        if host and target.id == host.id:
+            continue
+
+        await stage.set_permissions(
+            target,
+            overwrite=None
+        )
         self,
         guild: discord.Guild,
         carry_id: str

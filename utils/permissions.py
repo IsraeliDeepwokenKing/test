@@ -1,23 +1,24 @@
 import discord
 
+
 HOST_ROLES = {
     "Titus": "Titus Hoster",
-    "Heart of Enmity": "Enmity Hoster",
-    "Elder Primadon": "Elder Hoster"
+    "Elder Primadon": "Elder Hoster",
+    "Heart of Enmity": "Enmity Hoster"
 }
 
 PING_ROLES = {
     "Titus": "Titus Ping",
-    "Heart of Enmity": "Enmity Ping",
-    "Elder Primadon": "Elder Ping"
+    "Elder Primadon": "Elder Ping",
+    "Heart of Enmity": "Enmity Ping"
 }
 
 
 class PermissionManager:
 
-    # --------------------
+    # ----------------------------
     # HOST ROLE
-    # --------------------
+    # ----------------------------
 
     def has_host_role(
         self,
@@ -35,9 +36,9 @@ class PermissionManager:
             name=role_name
         ) is not None
 
-    # --------------------
+    # ----------------------------
     # PING ROLE
-    # --------------------
+    # ----------------------------
 
     def get_ping_role(
         self,
@@ -55,9 +56,9 @@ class PermissionManager:
             name=role_name
         )
 
-    # --------------------
+    # ----------------------------
     # CREATE CARRY ROLE
-    # --------------------
+    # ----------------------------
 
     async def create_carry_role(
         self,
@@ -66,35 +67,20 @@ class PermissionManager:
     ):
 
         role = await guild.create_role(
+
             name=f"carry-{carry_id}",
+
             mentionable=False,
-            reason="Deepwoken Carry"
+
+            reason="CarryBot"
+
         )
 
         return role
 
-    # --------------------
-    # DELETE CARRY ROLE
-    # --------------------
-
-    async def delete_carry_role(
-        self,
-        role: discord.Role
-    ):
-
-        if role is None:
-            return
-
-        try:
-            await role.delete(
-                reason="Carry ended"
-            )
-        except discord.HTTPException:
-            pass
-
-    # --------------------
+    # ----------------------------
     # GIVE ROLE
-    # --------------------
+    # ----------------------------
 
     async def give_carry_role(
         self,
@@ -109,9 +95,9 @@ class PermissionManager:
                 reason="Joined carry"
             )
 
-    # --------------------
+    # ----------------------------
     # REMOVE ROLE
-    # --------------------
+    # ----------------------------
 
     async def remove_carry_role(
         self,
@@ -124,6 +110,24 @@ class PermissionManager:
             await member.remove_roles(
                 role,
                 reason="Left carry"
+            )
+
+    # ----------------------------
+    # DELETE ROLE
+    # ----------------------------
+
+    async def delete_carry_role(
+        self,
+        guild: discord.Guild,
+        role_id: int
+    ):
+
+        role = guild.get_role(role_id)
+
+        if role:
+
+            await role.delete(
+                reason="Carry ended"
             )
 
 

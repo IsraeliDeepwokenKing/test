@@ -1,30 +1,34 @@
 import discord
-from discord import app_commands
-from discord.ext import commands
 
-from managers.host_manager import host_manager
+from discord.ext import commands
+from discord import app_commands
+
 from managers.carry_manager import carry_manager
-from managers.log_manager import log_manager
+from managers.embed_manager import embed_manager
+from managers.stage_manager import stage_manager
 from utils.permissions import permission_manager
 
 from views.carry_buttons import CarryButtons
 
 
-BOSSES = {
+BOSS_LIMITS = {
 
     "Titus": {
-        "minimum": 1,
-        "maximum": 6
+        "min": 1,
+        "max": 6,
+        "ping": "Titus Ping"
     },
 
-    "Elder": {
-        "minimum": 1,
-        "maximum": 1
+    "Elder Primadon": {
+        "min": 1,
+        "max": 16,
+        "ping": "Elder Ping"
     },
 
-    "Enmity": {
-        "minimum": 5,
-        "maximum": 10
+    "Heart of Enmity": {
+        "min": 5,
+        "max": 12,
+        "ping": "Enmity Ping"
     }
 
 }
@@ -39,14 +43,14 @@ class Host(commands.Cog):
 
     @app_commands.command(
         name="host",
-        description="Start new carry."
+        description="Start a new carry."
     )
 
     @app_commands.describe(
 
-        boss="Which boss?",
+        boss="Which boss are you hosting?",
 
-        players="How many players?"
+        players="Number of players:"
 
     )
 
@@ -90,21 +94,20 @@ class Host(commands.Cog):
         )
 
         guild = interaction.guild
-
-        member = interaction.user
+        host = interaction.user
 
         boss_name = boss.value
+
+        limits = BOSS_LIMITS[boss_name]
                 # -----------------------------
-        # VALIDACIJA BROJA IGRAČA
+        # BROJ IGRAČA
         # -----------------------------
 
-        boss_data = BOSSES[boss_name]
-
-        if players < boss_data["minimum"]:
+        if players < limits["min"]:
 
             await interaction.followup.send(
 
-                f"Min amount of players for **{boss_name}** is **{boss_data['minimum']}**.",
+                f"Minimum amount of players for **{boss_name}** is **{limits['min']}**.",
 
                 ephemeral=True
 
@@ -112,12 +115,11 @@ class Host(commands.Cog):
 
             return
 
-
-        if players > boss_data["maximum"]:
+        if players > limits["max"]:
 
             await interaction.followup.send(
 
-                f"Max amount of players for **{boss_name}** is **{boss_data['maximum']}**.",
+                f"Maximum amount of players for **{boss_name}** is **{limits['max']}**.",
 
                 ephemeral=True
 
@@ -131,7 +133,7 @@ class Host(commands.Cog):
         # -----------------------------
 
         if not permission_manager.has_host_role(
-            member,
+            host,
             boss_name
         ):
 
@@ -147,23 +149,55 @@ class Host(commands.Cog):
 
 
         # -----------------------------
-        # VEĆ POSTOJI CARRY
+        # VEĆ HOSTA
         # -----------------------------
 
         if carry_manager.host_has_carry(
-            member.id
+            host.id
         ):
 
             await interaction.followup.send(
 
-                "You are already hosting a carry.",
+                "Carry is already active.",
 
                 ephemeral=True
 
             )
 
             return
+                # -----------------------------
+        # CARRY ID
+        # -----------------------------
 
+        carry_id = carry_manager.generate_id()
+
+        # -----------------------------
+        # CARRY ROLE
+        # -----------------------------
+
+        carry_role = await permission_manager.create_carry_role(
+
+            guild,
+
+            carry_id
+
+        )
+
+        # -----------------------------
+        # STAGE
+        # -----------------------------
+
+        stage = await stage_manager.create(
+
+            guild,
+
+            carry_id,
+
+            boss_name,
+
+            host
+
+        )
 
         # -----------------------------
         # CARRY PINGS CHANNEL
@@ -181,46 +215,44 @@ class Host(commands.Cog):
 
             await interaction.followup.send(
 
-                "Missing ping channel, use /setup command.",
+                "Missing carry channel.",
 
                 ephemeral=True
 
             )
 
-            return
+            await carry_role.delete()
 
-
-        # -----------------------------
-        # CREATE HOST
-        # -----------------------------
-
-        try:
-
-            carry_id, carry_role, stage = await host_manager.create_host(
-
-                guild,
-
-                member,
-
-                boss_name,
-
-                players,
-
-                ping_channel
-
-            )
-
-        except Exception as e:
-
-            await interaction.followup.send(
-
-                str(e),
-
-                ephemeral=True
-
-            )
+            await stage.delete()
 
             return
+
+        # -----------------------------
+        # SPREMI U BAZU
+        # -----------------------------
+
+        carry_manager.create(
+
+            carry_id=carry_id,
+
+            guild_id=guild.id,
+
+            host_id=host.id,
+
+            boss=boss_name,
+
+            max_players=players,
+
+            stage_id=stage.id,
+
+            message_id=0,
+
+            channel_id=ping_channel.id,
+
+            role_id=carry_role.id
+
+        )
+
                 # -----------------------------
         # PING ROLE
         # -----------------------------
@@ -230,82 +262,35 @@ class Host(commands.Cog):
             boss_name
         )
 
-        ping = ""
+        ping_text = ""
 
-        if ping_role:
+        if ping_role is not None:
 
-            ping = ping_role.mention
-
-
-        # -----------------------------
-        # ACTIVE LIST
-        # -----------------------------
-
-        active = ""
-
-        for i in range(players):
-
-            active += f"{i + 1}. —\n"
-
+            ping_text = ping_role.mention
 
         # -----------------------------
         # EMBED
         # -----------------------------
 
-        embed = discord.Embed(
+        embed = await embed_manager.build(
 
-            title=f"{boss_name} Carry",
+            guild,
 
-            colour=discord.Colour.blurple()
-
-        )
-
-        embed.add_field(
-
-            name="Carry ID",
-
-            value=f"`{carry_id}`",
-
-            inline=False
+            carry_id
 
         )
 
-        embed.add_field(
+        # -----------------------------
+        # BUTTONS
+        # -----------------------------
 
-            name="Host",
+        view = CarryButtons(
 
-            value=member.mention,
+            self.bot,
 
-            inline=False
-
-        )
-
-        embed.add_field(
-
-            name=f"Active (0/{players})",
-
-            value=active,
-
-            inline=False
+            carry_id
 
         )
-
-        embed.add_field(
-
-            name="Waiting (0)",
-
-            value="None",
-
-            inline=False
-
-        )
-
-        embed.set_footer(
-
-            text="Deepwoken CarryBot"
-
-        )
-
 
         # -----------------------------
         # SEND MESSAGE
@@ -313,21 +298,17 @@ class Host(commands.Cog):
 
         message = await ping_channel.send(
 
-            content=ping,
+            content=ping_text,
 
             embed=embed,
 
-            view=CarryButtons(
-                self.bot,
-                carry_id
-            ),
+            view=view,
 
             allowed_mentions=discord.AllowedMentions(
                 roles=True
             )
 
         )
-
 
         # -----------------------------
         # SAVE MESSAGE ID
@@ -340,26 +321,22 @@ class Host(commands.Cog):
             message.id
 
         )
-                # -----------------------------
-        # LOG HOST
+
+        # -----------------------------
+        # UPDATE EMBED
         # -----------------------------
 
-        log_manager.add(
+        await embed_manager.update_message(
 
-            carry_id,
+            guild,
 
-            member.id,
-
-            "host_created"
+            carry_id
 
         )
 
-
         # -----------------------------
-        # UPDATE STAGE PERMISSIONS
+        # UPDATE STAGE
         # -----------------------------
-
-        from managers.stage_manager import stage_manager
 
         await stage_manager.sync_permissions(
 
@@ -368,18 +345,21 @@ class Host(commands.Cog):
             carry_id
 
         )
-
-
-        # -----------------------------
-        # NO SUCCESS MESSAGE
+                # -----------------------------
+        # GOTOVO
         # -----------------------------
 
-        # Namjerno ne šaljemo
-        # "Carry created"
-
-        # Hoster će vidjeti carry
-        # u carry-pings kanalu.
+        # Ne šaljemo "Carry created"
+        # jer se carry odmah vidi u
+        # #carry-pings kanalu.
 
         return
+
+
 async def setup(bot):
-    await bot.add_cog(Host(bot))
+
+    await bot.add_cog(
+
+        Host(bot)
+
+    )
