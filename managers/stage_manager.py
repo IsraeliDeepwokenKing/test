@@ -1,7 +1,5 @@
 import discord
 
-from managers.carry_manager import carry_manager
-
 
 class StageManager:
 
@@ -10,24 +8,41 @@ class StageManager:
         guild: discord.Guild,
         carry_id: str,
         boss: str,
-        host: discord.Member
+        host: discord.Member,
+        carry_role: discord.Role
     ):
 
         overwrites = {
+
             guild.default_role: discord.PermissionOverwrite(
-                view_channel=False
+                view_channel=False,
+                connect=False
             ),
+
+            carry_role: discord.PermissionOverwrite(
+                view_channel=True,
+                connect=True,
+                speak=False
+            ),
+
             host: discord.PermissionOverwrite(
                 view_channel=True,
                 connect=True,
-                speak=True
+                speak=True,
+                mute_members=True,
+                move_members=True
             )
+
         }
 
         stage = await guild.create_stage_channel(
+
             name=f"{boss}-{carry_id}",
+
             overwrites=overwrites,
+
             reason="Deepwoken Carry"
+
         )
 
         return stage
@@ -39,25 +54,23 @@ class StageManager:
         stage_id: int
     ):
 
-        try:
+        stage = guild.get_channel(stage_id)
 
-            stage = guild.get_channel(stage_id)
+        if stage is None:
 
-            if stage is None:
-                stage = await guild.fetch_channel(stage_id)
+            try:
 
-            await stage.delete(
-                reason="Carry ended"
-            )
+                stage = await guild.fetch_channel(
+                    stage_id
+                )
 
-        except discord.NotFound:
-            pass
+            except discord.NotFound:
 
-        except discord.Forbidden:
-            raise
+                return
 
-        except Exception:
-            raise
+        await stage.delete(
+            reason="Carry Ended"
+        )
 
 
     async def sync_permissions(
@@ -65,62 +78,9 @@ class StageManager:
         guild: discord.Guild,
         carry_id: str
     ):
-
-        carry = carry_manager.get(carry_id)
-
-        if carry is None:
-            return
-
-        stage = guild.get_channel(int(carry["stage_id"]))
-
-        if stage is None:
-
-            try:
-                stage = await guild.fetch_channel(
-                    int(carry["stage_id"])
-                )
-            except discord.NotFound:
-                return
-
-        host = guild.get_member(
-            int(carry["host_id"])
-        )
-
-        for target in list(stage.overwrites):
-
-            if isinstance(target, discord.Member):
-
-                if host and target.id == host.id:
-                    continue
-
-                await stage.set_permissions(
-                    target,
-                    overwrite=None
-                )
-
-        if host:
-
-            await stage.set_permissions(
-                host,
-                view_channel=True,
-                connect=True,
-                speak=True
-            )
-
-        for uid in carry["active"]:
-
-            member = guild.get_member(int(uid))
-
-            if member:
-
-                await stage.set_permissions(
-                    member,
-                    view_channel=True,
-                    connect=True,
-                    speak=False
-                )
-
-        # Waiting igrači nemaju pristup Stageu
+        # Više nije potreban.
+        # Pristup Stageu kontrolira temporary carry role.
+        return
 
 
 stage_manager = StageManager()
