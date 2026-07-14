@@ -3,14 +3,14 @@ import discord
 
 HOST_ROLES = {
     "Titus": "Titus Hoster",
-    "Elder Primadon": "Elder Hoster",
-    "Heart of Enmity": "Enmity Hoster"
+    "Elder": "Elder Hoster",
+    "Enmity": "Enmity Hoster"
 }
 
 PING_ROLES = {
     "Titus": "Titus Ping",
-    "Elder Primadon": "Elder Ping",
-    "Heart of Enmity": "Enmity Ping"
+    "Elder": "Elder Ping",
+    "Enmity": "Enmity Ping"
 }
 
 
