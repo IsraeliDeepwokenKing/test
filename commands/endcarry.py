@@ -1,85 +1,89 @@
 import discord
 
-from discord import app_commands
 from discord.ext import commands
-from utils.permissions import permission_manager
+from discord import app_commands
 
+from managers.carry_manager import carry_manager
+from managers.log_manager import log_manager
+from utils.permissions import permission_manager
 
 
 class EndCarry(commands.Cog):
 
     def __init__(self, bot):
-        self.bot = bot
 
+        self.bot = bot
 
 
     @app_commands.command(
         name="endcarry",
-        description="End a carry"
+        description="Ends one of your carries."
     )
+
     @app_commands.describe(
         carry_id="Carry ID"
     )
+
     async def endcarry(
+
         self,
+
         interaction: discord.Interaction,
+
         carry_id: str
+
     ):
-
-
-        if not hasattr(self.bot, "carries"):
-
-            await interaction.response.send_message(
-                "No active carries.",
-                ephemeral=True
-            )
-            return
-
-
-
-        carry = self.bot.carries.get(
-            carry_id.upper()
-        )
-
-
-        if not carry:
-
-            await interaction.response.send_message(
-                "Carry not found.",
-                ephemeral=True
-            )
-
-            return
-
-
-
-        if interaction.user.id != carry["host"]:
-
-            await interaction.response.send_message(
-                "Only the host can end this carry.",
-                ephemeral=True
-            )
-
-            return
-
-
 
         await interaction.response.defer(
             ephemeral=True
         )
 
+        carry_id = carry_id.upper()
 
+        carry = carry_manager.get(
+            carry_id
+        )
+
+        if carry is None:
+
+            await interaction.followup.send(
+
+                "Carry not found.",
+
+                ephemeral=True
+
+            )
+
+            return
+
+        if interaction.user.id != carry["host_id"]:
+
+            await interaction.followup.send(
+
+                "Only the host can end this carry.",
+
+                ephemeral=True
+
+            )
+
+            return
 
         guild = interaction.guild
 
-
-
-        # Remove player roles
-
         role = guild.get_role(
-            carry["role"]
+            carry["role_id"]
         )
 
+        channel = guild.get_channel(
+            carry["channel_id"]
+        )
+
+        stage = guild.get_channel(
+            carry["stage_id"]
+        )
+                # ----------------------------
+        # REMOVE ROLES
+        # ----------------------------
 
         if role:
 
@@ -89,99 +93,115 @@ class EndCarry(commands.Cog):
 
                 if member:
 
-                    await remove_carry_role(
-                        member,
-                        role
-                    )
+                    try:
 
+                        await permission_manager.remove_carry_role(
+                            member,
+                            role
+                        )
 
+                    except Exception as e:
 
-        # Delete carry message
+                        print(
+                            f"Failed removing role from {uid}:",
+                            e
+                        )
 
-        try:
+        # ----------------------------
+        # DELETE MESSAGE
+        # ----------------------------
 
-            channel = guild.get_channel(
-                carry["channel"]
-            )
+        if channel:
 
-
-            if channel:
+            try:
 
                 message = await channel.fetch_message(
-                    carry["message"]
+                    carry["message_id"]
                 )
 
                 await message.delete()
 
+            except Exception as e:
 
-        except Exception as e:
+                print(
+                    "Message delete failed:",
+                    e
+                )
 
-            print(
-                "Message delete error:",
-                e
-            )
+        # ----------------------------
+        # DELETE STAGE
+        # ----------------------------
 
+        if stage:
 
-
-        # Delete stage
-
-        try:
-
-            stage = guild.get_channel(
-                carry["stage"]
-            )
-
-
-            if stage:
+            try:
 
                 await stage.delete(
-                    reason="Carry ended"
+                    reason="Carry Ended"
                 )
 
+            except Exception as e:
 
-        except Exception as e:
+                print(
+                    "Stage delete failed:",
+                    e
+                )
 
-            print(
-                "Stage delete error:",
-                e
-            )
+        # ----------------------------
+        # DELETE TEMP ROLE
+        # ----------------------------
 
+        if role:
 
+            try:
 
-        # Delete temporary role
+                await role.delete(
+                    reason="Carry Ended"
+                )
+
+            except Exception as e:
+
+                print(
+                    "Role delete failed:",
+                    e
+                )
+
+        # ----------------------------
+        # CLEAR LOGS
+        # ----------------------------
 
         try:
 
-            if role:
-
-                await role.delete(
-                    reason="Carry ended"
-                )
-
+            log_manager.clear(
+                carry_id
+            )
 
         except Exception as e:
 
             print(
-                "Role delete error:",
+                "Log delete failed:",
                 e
             )
 
+        # ----------------------------
+        # DELETE DATABASE ENTRY
+        # ----------------------------
 
+        carry_manager.delete(
+            carry_id
+        )
 
-        # Clear memory
-
-        del self.bot.carries[carry_id.upper()]
-
-
+        # ----------------------------
+        # FINISHED
+        # ----------------------------
 
         await interaction.followup.send(
 
-            f"Carry `{carry_id.upper()}` has been deleted.",
+            f"✅ Carry **{carry_id}** ended successfully.",
 
             ephemeral=True
 
         )
-
 
 
 async def setup(bot):
