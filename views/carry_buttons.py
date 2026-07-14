@@ -1,55 +1,42 @@
 import discord
+from discord.ui import Button, View
 
-from utils.permissions import (
-    give_carry_role,
-    remove_carry_role
-)
-
-
-class CarryButtons(discord.ui.View):
-
-    def __init__(self, bot, carry_id):
-
-        super().__init__(timeout=None)
-
-        self.bot = bot
-        self.carry_id = carry_id
+from managers.carry_manager import carry_manager
+from managers.queue_manager import queue_manager
+from managers.embed_manager import embed_manager
+from managers.stage_manager import stage_manager
+from utils.permissions import permission_manager
 
 
+class JoinButton(Button):
 
-    @discord.ui.button(
-        label="Join",
-        style=discord.ButtonStyle.green,
-        custom_id="carry_join"
-    )
-    async def join(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
+    def __init__(self, carry_id: str):
 
-        carry = self.bot.carries.get(
-            self.carry_id
+        super().__init__(
+            label="Join",
+            style=discord.ButtonStyle.success,
+            custom_id=f"join:{carry_id}"
         )
 
-        if not carry:
+        self.carry_id = carry_id
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        carry = carry_manager.get(self.carry_id)
+
+        if carry is None:
 
             await interaction.response.send_message(
                 "This carry no longer exists.",
                 ephemeral=True
             )
+
             return
 
-
-
-        user = interaction.user
-        user_id = user.id
-
-
-
-        # Host cannot join own carry
-
-        if user_id == carry["host"]:
+        if interaction.user.id == carry["host_id"]:
 
             await interaction.response.send_message(
                 "You cannot join your own carry.",
@@ -58,107 +45,85 @@ class CarryButtons(discord.ui.View):
 
             return
 
+        guild = interaction.guild
+        member = interaction.user
 
+        success, result = queue_manager.join(
+            self.carry_id,
+            member.id
+        )
 
-        if (
-            user_id in carry["active"]
-            or user_id in carry["waiting"]
-        ):
+        if not success:
 
             await interaction.response.send_message(
-                "You are already in this queue.",
+                result,
                 ephemeral=True
             )
 
             return
 
-
-
-        guild = interaction.guild
-
         role = guild.get_role(
-            carry["role"]
+            carry["role_id"]
         )
 
+        if role:
 
-
-        if len(carry["active"]) < carry["max"]:
-
-
-            carry["active"].append(
-                user_id
-            )
-
-
-            location = "Active"
-
-
-            await give_carry_role(
-                user,
+            await permission_manager.give_carry_role(
+                member,
                 role
             )
 
-
-        else:
-
-
-            carry["waiting"].append(
-                user_id
-            )
-
-
-            location = "Waiting"
-
-
-
-
-
-        carry["join_log"].append({
-
-            "user": user_id,
-
-            "time": discord.utils.utcnow(),
-
-            "location": location
-
-        })
-
-
-
-        await update_carry_message(
-            self.bot,
-            carry
-        )
-
-
-
-        await interaction.response.send_message(
-            f"You joined as {location}.",
-            ephemeral=True
-        )
-
-
-
-
-
-    @discord.ui.button(
-        label="Leave",
-        style=discord.ButtonStyle.red,
-        custom_id="carry_leave"
-    )
-    async def leave(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-
-
-        carry = self.bot.carries.get(
+        await stage_manager.sync_permissions(
+            guild,
             self.carry_id
         )
 
+        await embed_manager.update_message(
+            guild,
+            self.carry_id
+        )
 
-        if not carry:
+        if result == "active":
+
+            carry = carry_manager.get(self.carry_id)
+
+            position = carry["active"].index(member.id)
+
+            await interaction.response.send_message(
+                f"You joined the carry.\nPosition: **{position + 1}**",
+                ephemeral=True
+            )
+
+        else:
+
+            carry = carry_manager.get(self.carry_id)
+
+            position = carry["waiting"].index(member.id)
+
+            await interaction.response.send_message(
+                f"The carry is full.\nYou have been added to the waiting queue (**{position + 1}**).",
+                ephemeral=True
+            )
+class LeaveButton(Button):
+
+    def __init__(self, carry_id: str):
+
+        super().__init__(
+            label="Leave",
+            style=discord.ButtonStyle.danger,
+            custom_id=f"leave:{carry_id}"
+        )
+
+        self.carry_id = carry_id
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        carry = carry_manager.get(self.carry_id)
+
+        if carry is None:
 
             await interaction.response.send_message(
                 "This carry no longer exists.",
@@ -167,98 +132,54 @@ class CarryButtons(discord.ui.View):
 
             return
 
-
-
-        user = interaction.user
-        user_id = user.id
-
         guild = interaction.guild
+        member = interaction.user
 
-        role = guild.get_role(
-            carry["role"]
+        success, promoted = queue_manager.leave(
+            self.carry_id,
+            member.id
         )
 
-
-
-        promoted = None
-
-
-
-        if user_id in carry["active"]:
-
-
-            carry["active"].remove(
-                user_id
-            )
-
-
-            await remove_carry_role(
-                user,
-                role
-            )
-
-
-
-            if carry["waiting"]:
-
-
-                promoted = carry["waiting"].pop(0)
-
-
-                carry["active"].append(
-                    promoted
-                )
-
-
-                new_member = guild.get_member(
-                    promoted
-                )
-
-
-                if new_member:
-
-                    await give_carry_role(
-                        new_member,
-                        role
-                    )
-
-
-
-        elif user_id in carry["waiting"]:
-
-
-            carry["waiting"].remove(
-                user_id
-            )
-
-
-        else:
+        if not success:
 
             await interaction.response.send_message(
-                "You are not in this queue.",
+                promoted,
                 ephemeral=True
             )
 
             return
 
-
-
-        carry["leave_log"].append({
-
-            "user": user_id,
-
-            "time": discord.utils.utcnow()
-
-        })
-
-
-
-        await update_carry_message(
-            self.bot,
-            carry
+        role = guild.get_role(
+            carry["role_id"]
         )
 
+        if role:
 
+            await permission_manager.remove_carry_role(
+                member,
+                role
+            )
+
+        if promoted is not None:
+
+            promoted_member = guild.get_member(promoted)
+
+            if promoted_member and role:
+
+                await permission_manager.give_carry_role(
+                    promoted_member,
+                    role
+                )
+
+        await stage_manager.sync_permissions(
+            guild,
+            self.carry_id
+        )
+
+        await embed_manager.update_message(
+            guild,
+            self.carry_id
+        )
 
         await interaction.response.send_message(
             "You left the carry.",
@@ -266,104 +187,23 @@ class CarryButtons(discord.ui.View):
         )
 
 
+class CarryButtons(View):
 
+    def __init__(
+        self,
+        bot,
+        carry_id: str
+    ):
 
+        super().__init__(timeout=None)
 
-async def update_carry_message(bot, carry):
+        self.bot = bot
+        self.carry_id = carry_id
 
+        self.add_item(
+            JoinButton(carry_id)
+        )
 
-    guild = bot.get_guild(
-        carry["guild"]
-    )
-
-
-    channel = guild.get_channel(
-        carry["channel"]
-    )
-
-
-    message = await channel.fetch_message(
-        carry["message"]
-    )
-
-
-
-    active = ""
-
-    for i in range(carry["max"]):
-
-        if i < len(carry["active"]):
-
-            member = guild.get_member(
-                carry["active"][i]
-            )
-
-            active += (
-                f"{i+1}. {member.mention}\n"
-                if member else
-                f"{i+1}. Unknown\n"
-            )
-
-        else:
-
-            active += f"{i+1}. -\n"
-
-
-
-    waiting = ""
-
-
-    if carry["waiting"]:
-
-        for i, uid in enumerate(carry["waiting"]):
-
-            member = guild.get_member(uid)
-
-            waiting += (
-                f"{i+1}. {member.mention}\n"
-                if member else
-                f"{i+1}. Unknown\n"
-            )
-
-    else:
-
-        waiting = "None"
-
-
-
-    embed = discord.Embed(
-
-        title=f"{carry['boss']} Carry",
-
-        description=f"""
-
-Carry ID:
-`{carry['id']}`
-
-
-Host:
-<@{carry['host']}>
-
-
-Active ({len(carry['active'])}/{carry['max']})
-
-{active}
-
-
-Waiting ({len(carry['waiting'])})
-
-{waiting}
-
-
-Status:
-Open
-
-"""
-
-    )
-
-
-
-    await message.edit(
-        embed=embed
-    )
+        self.add_item(
+            LeaveButton(carry_id)
+        )
