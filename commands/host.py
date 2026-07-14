@@ -19,13 +19,13 @@ BOSS_LIMITS = {
         "ping": "Titus Ping"
     },
 
-    "Elder Primadon": {
+    "Elder": {
         "min": 1,
         "max": 16,
         "ping": "Elder Ping"
     },
 
-    "Heart of Enmity": {
+    "Enmity": {
         "min": 5,
         "max": 12,
         "ping": "Enmity Ping"
@@ -85,7 +85,7 @@ class Host(commands.Cog):
 
         boss: app_commands.Choice[str],
 
-        players: app_commands.Range[int, 1, 10]
+        players: app_commands.Range[int, 1, 16]
 
     ):
 
