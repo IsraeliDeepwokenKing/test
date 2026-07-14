@@ -11,24 +11,8 @@ class StageManager:
         host: discord.Member
     ):
 
-        overwrites = {
-
-            guild.default_role: discord.PermissionOverwrite(
-                view_channel=False,
-                connect=False
-            ),
-
-            host: discord.PermissionOverwrite(
-                view_channel=True,
-                connect=True,
-                speak=True
-            )
-
-        }
-
         stage = await guild.create_stage_channel(
             name=f"{boss}-{carry_id}",
-            overwrites=overwrites,
             reason="Deepwoken Carry"
         )
 
@@ -42,24 +26,16 @@ class StageManager:
     ):
 
         try:
+            channel = guild.get_channel(stage_id)
 
-            stage = guild.get_channel(stage_id)
+            if channel is None:
+                channel = await guild.fetch_channel(stage_id)
 
-            if stage is None:
-                stage = await guild.fetch_channel(stage_id)
-
-            await stage.delete(
-                reason="Carry Ended"
-            )
+            if channel:
+                await channel.delete(reason="Carry Ended")
 
         except discord.NotFound:
-            return
-
-        except discord.Forbidden:
-            raise
-
-        except Exception:
-            raise
+            pass
 
 
     async def sync_permissions(
@@ -67,8 +43,6 @@ class StageManager:
         guild: discord.Guild,
         carry_id: str
     ):
-        # Za prvu verziju bota nije potreban.
-        # Temporary carry role kontrolira pristup.
         return
 
 
