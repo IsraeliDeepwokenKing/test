@@ -1,11 +1,13 @@
-import discord
+import traceback
 
+import discord
 from discord.ext import commands
 from discord import app_commands
 
 from managers.carry_manager import carry_manager
 from managers.embed_manager import embed_manager
 from managers.stage_manager import stage_manager
+
 from utils.permissions import permission_manager
 
 from views.carry_buttons import CarryButtons
@@ -43,15 +45,12 @@ class Host(commands.Cog):
 
     @app_commands.command(
         name="host",
-        description="Start a new carry."
+        description="Start a carry."
     )
 
     @app_commands.describe(
-
-        boss="Which boss are you hosting?",
-
-        players="Number of players:"
-
+        boss="Boss",
+        players="Maximum players"
     )
 
     @app_commands.choices(
@@ -89,271 +88,293 @@ class Host(commands.Cog):
 
     ):
 
-        await interaction.response.defer(
-            ephemeral=True
-        )
+        try:
 
-        guild = interaction.guild
-        host = interaction.user
+            await interaction.response.defer(
+                ephemeral=True
+            )
 
-        boss_name = boss.value
+            guild = interaction.guild
+            host = interaction.user
 
-        limits = BOSS_LIMITS[boss_name]
-                # -----------------------------
-        # BROJ IGRAČA
-        # -----------------------------
+            boss_name = boss.value
 
-        if players < limits["min"]:
+            limits = BOSS_LIMITS[boss_name]
+
+            # -------------------------
+            # PLAYER LIMITS
+            # -------------------------
+
+            if players < limits["min"]:
+
+                await interaction.followup.send(
+
+                    f"Minimum players for **{boss_name}** is **{limits['min']}**.",
+
+                    ephemeral=True
+
+                )
+
+                return
+
+
+            if players > limits["max"]:
+
+                await interaction.followup.send(
+
+                    f"Maximum players for **{boss_name}** is **{limits['max']}**.",
+
+                    ephemeral=True
+
+                )
+
+                return
+
+
+            # -------------------------
+            # HOST ROLE
+            # -------------------------
+
+            if not permission_manager.has_host_role(
+
+                host,
+                boss_name
+
+            ):
+
+                await interaction.followup.send(
+
+                    "You don't have permission to host this boss.",
+
+                    ephemeral=True
+
+                )
+
+                return
+
+
+            # -------------------------
+            # ALREADY HOSTING
+            # -------------------------
+
+            if carry_manager.host_has_carry(
+                host.id
+            ):
+
+                await interaction.followup.send(
+
+                    "You already have an active carry.",
+
+                    ephemeral=True
+
+                )
+
+                return
+
+
+            carry_id = carry_manager.generate_id()
+                        # -------------------------
+            # CREATE CARRY ROLE
+            # -------------------------
+
+            carry_role = await permission_manager.create_carry_role(
+
+                guild,
+                carry_id
+
+            )
+
+            # -------------------------
+            # CREATE STAGE
+            # -------------------------
+
+            stage = await stage_manager.create(
+
+                guild,
+                carry_id,
+                boss_name,
+                host
+
+            )
+
+            # -------------------------
+            # FIND CARRY CHANNEL
+            # -------------------------
+
+            ping_channel = discord.utils.get(
+
+                guild.text_channels,
+                name="carry-pings"
+
+            )
+
+            if ping_channel is None:
+
+                await carry_role.delete()
+
+                await stage.delete()
+
+                await interaction.followup.send(
+
+                    "Couldn't find **#carry-pings**.",
+
+                    ephemeral=True
+
+                )
+
+                return
+
+            # -------------------------
+            # SAVE CARRY
+            # -------------------------
+
+            carry_manager.create(
+
+                carry_id=carry_id,
+
+                guild_id=guild.id,
+
+                host_id=host.id,
+
+                boss=boss_name,
+
+                max_players=players,
+
+                role_id=carry_role.id,
+
+                stage_id=stage.id,
+
+                channel_id=ping_channel.id,
+
+                message_id=0
+
+            )
+
+            # -------------------------
+            # GET PING ROLE
+            # -------------------------
+
+            ping_role = permission_manager.get_ping_role(
+
+                guild,
+                boss_name
+
+            )
+
+            ping_text = ""
+
+            if ping_role:
+
+                ping_text = ping_role.mention
+
+            # -------------------------
+            # BUILD EMBED
+            # -------------------------
+
+            embed = await embed_manager.build(
+
+                guild,
+                carry_id
+
+            )
+
+            # -------------------------
+            # BUTTONS
+            # -------------------------
+
+            view = CarryButtons(
+
+                self.bot,
+                carry_id
+
+            )
+
+            # -------------------------
+            # SEND MESSAGE
+            # -------------------------
+
+            message = await ping_channel.send(
+
+                content=ping_text,
+
+                embed=embed,
+
+                view=view,
+
+                allowed_mentions=discord.AllowedMentions(
+                    roles=True
+                )
+
+            )
+
+            carry_manager.set_message(
+
+                carry_id,
+                message.id
+
+            )
+                        # -------------------------
+            # UPDATE EMBED
+            # -------------------------
+
+            await embed_manager.update_message(
+
+                guild,
+                carry_id
+
+            )
+
+            # -------------------------
+            # UPDATE STAGE PERMISSIONS
+            # -------------------------
+
+            await stage_manager.sync_permissions(
+
+                guild,
+                carry_id
+
+            )
+
+            # -------------------------
+            # DONE
+            # -------------------------
 
             await interaction.followup.send(
 
-                f"Minimum amount of players for **{boss_name}** is **{limits['min']}**.",
+                "✅ Carry created successfully.",
 
                 ephemeral=True
 
             )
 
-            return
+        except Exception as e:
 
-        if players > limits["max"]:
+            traceback.print_exc()
 
-            await interaction.followup.send(
+            if interaction.response.is_done():
 
-                f"Maximum amount of players for **{boss_name}** is **{limits['max']}**.",
+                try:
 
-                ephemeral=True
+                    await interaction.followup.send(
 
-            )
+                        f"❌ {type(e).__name__}: {e}",
 
-            return
+                        ephemeral=True
 
+                    )
 
-        # -----------------------------
-        # HOST ROLE
-        # -----------------------------
+                except Exception:
+                    pass
 
-        if not permission_manager.has_host_role(
-            host,
-            boss_name
-        ):
+            else:
 
-            await interaction.followup.send(
+                await interaction.response.send_message(
 
-                "You dont have the needed role.",
+                    f"❌ {type(e).__name__}: {e}",
 
-                ephemeral=True
+                    ephemeral=True
 
-            )
-
-            return
-
-
-        # -----------------------------
-        # VEĆ HOSTA
-        # -----------------------------
-
-        if carry_manager.host_has_carry(
-            host.id
-        ):
-
-            await interaction.followup.send(
-
-                "Carry is already active.",
-
-                ephemeral=True
-
-            )
-
-            return
-                # -----------------------------
-        # CARRY ID
-        # -----------------------------
-
-        carry_id = carry_manager.generate_id()
-
-        # -----------------------------
-        # CARRY ROLE
-        # -----------------------------
-
-        carry_role = await permission_manager.create_carry_role(
-
-            guild,
-
-            carry_id
-
-        )
-
-        # -----------------------------
-        # STAGE
-        # -----------------------------
-
-        stage = await stage_manager.create(
-
-            guild,
-
-            carry_id,
-
-            boss_name,
-
-            host
-
-        )
-
-        # -----------------------------
-        # CARRY PINGS CHANNEL
-        # -----------------------------
-
-        ping_channel = discord.utils.get(
-
-            guild.text_channels,
-
-            name="carry-pings"
-
-        )
-
-        if ping_channel is None:
-
-            await interaction.followup.send(
-
-                "Missing carry channel.",
-
-                ephemeral=True
-
-            )
-
-            await carry_role.delete()
-
-            await stage.delete()
-
-            return
-
-        # -----------------------------
-        # SPREMI U BAZU
-        # -----------------------------
-
-        carry_manager.create(
-
-            carry_id=carry_id,
-
-            guild_id=guild.id,
-
-            host_id=host.id,
-
-            boss=boss_name,
-
-            max_players=players,
-
-            stage_id=stage.id,
-
-            message_id=0,
-
-            channel_id=ping_channel.id,
-
-            role_id=carry_role.id
-
-        )
-
-                # -----------------------------
-        # PING ROLE
-        # -----------------------------
-
-        ping_role = permission_manager.get_ping_role(
-            guild,
-            boss_name
-        )
-
-        ping_text = ""
-
-        if ping_role is not None:
-
-            ping_text = ping_role.mention
-
-        # -----------------------------
-        # EMBED
-        # -----------------------------
-
-        embed = await embed_manager.build(
-
-            guild,
-
-            carry_id
-
-        )
-
-        # -----------------------------
-        # BUTTONS
-        # -----------------------------
-
-        view = CarryButtons(
-
-            self.bot,
-
-            carry_id
-
-        )
-
-        # -----------------------------
-        # SEND MESSAGE
-        # -----------------------------
-
-        message = await ping_channel.send(
-
-            content=ping_text,
-
-            embed=embed,
-
-            view=view,
-
-            allowed_mentions=discord.AllowedMentions(
-                roles=True
-            )
-
-        )
-
-        # -----------------------------
-        # SAVE MESSAGE ID
-        # -----------------------------
-
-        carry_manager.set_message(
-
-            carry_id,
-
-            message.id
-
-        )
-
-        # -----------------------------
-        # UPDATE EMBED
-        # -----------------------------
-
-        await embed_manager.update_message(
-
-            guild,
-
-            carry_id
-
-        )
-
-        # -----------------------------
-        # UPDATE STAGE
-        # -----------------------------
-
-        await stage_manager.sync_permissions(
-
-            guild,
-
-            carry_id
-
-        )
-                # -----------------------------
-        # GOTOVO
-        # -----------------------------
-
-        # Ne šaljemo "Carry created"
-        # jer se carry odmah vidi u
-        # #carry-pings kanalu.
-
-        return
+                )
 
 
 async def setup(bot):
@@ -363,3 +384,4 @@ async def setup(bot):
         Host(bot)
 
     )
+            
