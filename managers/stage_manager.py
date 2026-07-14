@@ -8,8 +8,7 @@ class StageManager:
         guild: discord.Guild,
         carry_id: str,
         boss: str,
-        host: discord.Member,
-        carry_role: discord.Role
+        host: discord.Member
     ):
 
         overwrites = {
@@ -19,30 +18,18 @@ class StageManager:
                 connect=False
             ),
 
-            carry_role: discord.PermissionOverwrite(
-                view_channel=True,
-                connect=True,
-                speak=False
-            ),
-
             host: discord.PermissionOverwrite(
                 view_channel=True,
                 connect=True,
-                speak=True,
-                mute_members=True,
-                move_members=True
+                speak=True
             )
 
         }
 
         stage = await guild.create_stage_channel(
-
             name=f"{boss}-{carry_id}",
-
             overwrites=overwrites,
-
             reason="Deepwoken Carry"
-
         )
 
         return stage
@@ -54,23 +41,25 @@ class StageManager:
         stage_id: int
     ):
 
-        stage = guild.get_channel(stage_id)
+        try:
 
-        if stage is None:
+            stage = guild.get_channel(stage_id)
 
-            try:
+            if stage is None:
+                stage = await guild.fetch_channel(stage_id)
 
-                stage = await guild.fetch_channel(
-                    stage_id
-                )
+            await stage.delete(
+                reason="Carry Ended"
+            )
 
-            except discord.NotFound:
+        except discord.NotFound:
+            return
 
-                return
+        except discord.Forbidden:
+            raise
 
-        await stage.delete(
-            reason="Carry Ended"
-        )
+        except Exception:
+            raise
 
 
     async def sync_permissions(
@@ -78,8 +67,8 @@ class StageManager:
         guild: discord.Guild,
         carry_id: str
     ):
-        # Više nije potreban.
-        # Pristup Stageu kontrolira temporary carry role.
+        # Za prvu verziju bota nije potreban.
+        # Temporary carry role kontrolira pristup.
         return
 
 
