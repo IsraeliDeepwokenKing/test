@@ -35,7 +35,9 @@ async def load_extensions():
     extensions = [
         "commands.setup",
         "commands.host",
-        "commands.endcarry"
+        "commands.endcarry",
+        "commands.incident",
+        "commands.closeincident"
     ]
 
     import traceback
