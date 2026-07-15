@@ -193,7 +193,8 @@ class Host(commands.Cog):
                 guild,
                 carry_id,
                 boss_name,
-                host
+                host,
+                carry_role
 
             )
 

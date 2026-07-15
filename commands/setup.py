@@ -1,7 +1,71 @@
 import discord
-
-from discord import app_commands
 from discord.ext import commands
+from discord import app_commands
+from discord.ui import View, Button
+
+PING_ROLES = [
+    "Enmity Ping",
+    "Elder Ping",
+    "Titus Ping"
+]
+
+HOSTER_ROLES = [
+    "Enmity Hoster",
+    "Elder Hoster",
+    "Titus Hoster"
+]
+
+
+class PingRoleButton(Button):
+
+    def __init__(self, role_name: str):
+        super().__init__(
+            label=role_name.replace(" Ping", ""),
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"pingrole:{role_name}"
+        )
+        self.role_name = role_name
+
+    async def callback(self, interaction: discord.Interaction):
+
+        role = discord.utils.get(
+            interaction.guild.roles,
+            name=self.role_name
+        )
+
+        if role is None:
+            await interaction.response.send_message(
+                "Role not found.",
+                ephemeral=True
+            )
+            return
+
+        if role in interaction.user.roles:
+
+            await interaction.user.remove_roles(role)
+
+            await interaction.response.send_message(
+                f"Removed **{role.name}**.",
+                ephemeral=True
+            )
+
+        else:
+
+            await interaction.user.add_roles(role)
+
+            await interaction.response.send_message(
+                f"Added **{role.name}**.",
+                ephemeral=True
+            )
+
+
+class PingRoleView(View):
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        for role in PING_ROLES:
+            self.add_item(PingRoleButton(role))
 
 
 class Setup(commands.Cog):
@@ -9,179 +73,115 @@ class Setup(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-
     @app_commands.command(
         name="setup",
-        description="Sets up carry system"
+        description="Setup Carry Bot"
     )
-    @app_commands.checks.has_permissions(administrator=True)
-    async def setup(
+    async def setup_command(
         self,
         interaction: discord.Interaction
     ):
 
+        await interaction.response.defer(ephemeral=True)
+
         guild = interaction.guild
 
-        await interaction.response.defer(
-            ephemeral=True
-        )
-
-        category = discord.utils.get(
+        carry_system = discord.utils.get(
             guild.categories,
-            name="Deepwoken Carry"
+            name="Carry System"
         )
 
-        if category is None:
-
-            category = await guild.create_category(
-                "Deepwoken Carry"
+        if carry_system is None:
+            carry_system = await guild.create_category(
+                "Carry System"
             )
 
-        channels = [
+        carry_stages = discord.utils.get(
+            guild.categories,
+            name="Carry Stages"
+        )
 
-            "host-commands",
-
-            "carry-pings",
-
-            "incident-reports",
-
-            "logs"
-
-        ]
-
-        for name in channels:
-
-            channel = discord.utils.get(
-                guild.text_channels,
-                name=name
+        if carry_stages is None:
+            await guild.create_category(
+                "Carry Stages"
             )
 
-            if channel:
+        for role in HOSTER_ROLES:
 
-                continue
-
-            overwrites = {
-
-                guild.default_role:
-                discord.PermissionOverwrite(
-
-                    view_channel=True,
-
-                    send_messages=True
-
-                )
-
-            }
-
-            # carry-pings
-
-            if name == "carry-pings":
-
-                overwrites[guild.default_role] = discord.PermissionOverwrite(
-
-                    view_channel=True,
-
-                    send_messages=False
-
-                )
-
-                overwrites[guild.me] = discord.PermissionOverwrite(
-
-                    view_channel=True,
-
-                    send_messages=True
-
-                )
-
-            # logs
-
-            elif name == "logs":
-
-                overwrites[guild.default_role] = discord.PermissionOverwrite(
-
-                    view_channel=False
-
-                )
-
-                overwrites[guild.me] = discord.PermissionOverwrite(
-
-                    view_channel=True,
-
-                    send_messages=True
-
-                )
-
-            await guild.create_text_channel(
-
-                name=name,
-
-                category=category,
-
-                overwrites=overwrites
-
-            )
-
-        roles = [
-
-            "Titus Hoster",
-
-            "Elder Hoster",
-
-            "Enmity Hoster",
-
-            "Titus Ping",
-
-            "Elder Ping",
-
-            "Enmity Ping"
-
-        ]
-
-        for role_name in roles:
-
-            role = discord.utils.get(
-
+            if discord.utils.get(
                 guild.roles,
-
-                name=role_name
-
-            )
-
-            if role is None:
+                name=role
+            ) is None:
 
                 await guild.create_role(
-
-                    name=role_name,
-
-                    mentionable=True,
-
-                    reason="CarryBot setup"
-
+                    name=role
                 )
 
-            else:
+        for role in PING_ROLES:
 
-                if not role.mentionable:
+            if discord.utils.get(
+                guild.roles,
+                name=role
+            ) is None:
 
-                    await role.edit(
+                await guild.create_role(
+                    name=role,
+                    mentionable=True
+                )
 
-                        mentionable=True
+        for name in [
+            "host-commands",
+            "carry-pings",
+            "carry-logs",
+            "reactions"
+        ]:
 
-                    )
+            if discord.utils.get(
+                guild.text_channels,
+                name=name
+            ) is None:
+
+                await guild.create_text_channel(
+                    name=name,
+                    category=carry_system
+                )
+
+        reaction_channel = discord.utils.get(
+            guild.text_channels,
+            name="reactions"
+        )
+
+        if reaction_channel:
+
+            has_messages = False
+
+            async for _ in reaction_channel.history(limit=1):
+                has_messages = True
+                break
+
+            if not has_messages:
+
+                embed = discord.Embed(
+                    title="Carry Ping Roles",
+                    description="Press a button to toggle ping roles.",
+                    colour=discord.Colour.blurple()
+                )
+
+                await reaction_channel.send(
+                    embed=embed,
+                    view=PingRoleView()
+                )
 
         await interaction.followup.send(
-
-            "Setup has finished.",
-
+            "✅ Setup completed.",
             ephemeral=True
-
         )
 
 
 async def setup(bot):
 
+    bot.add_view(PingRoleView())
+
     await bot.add_cog(
-
         Setup(bot)
-
     )
