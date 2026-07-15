@@ -133,7 +133,8 @@ class Setup(commands.Cog):
             "host-commands",
             "carry-pings",
             "carry-logs",
-            "reactions"
+            "reactions",
+            "incident-reports"
         ]:
 
             if discord.utils.get(
