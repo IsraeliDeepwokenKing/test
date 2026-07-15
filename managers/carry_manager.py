@@ -46,8 +46,7 @@ class CarryManager:
 
         db.cursor.execute(
             """
-            INSERT INTO carries
-            (
+            INSERT INTO carries(
                 carry_id,
                 guild_id,
                 host_id,
@@ -192,6 +191,22 @@ class CarryManager:
 
         db.conn.commit()
 
+    def host_has_carry(
+        self,
+        host_id: int
+    ):
+
+        row = db.cursor.execute(
+            """
+            SELECT 1
+            FROM carries
+            WHERE host_id=?
+            """,
+            (host_id,)
+        ).fetchone()
+
+        return row is not None
+
     def get_by_host(
         self,
         host_id: int
@@ -229,22 +244,6 @@ class CarryManager:
             return None
 
         return self.get(row[0])
-
-    def host_has_carry(
-        self,
-        host_id: int
-    ):
-
-        row = db.cursor.execute(
-            """
-            SELECT 1
-            FROM carries
-            WHERE host_id=?
-            """,
-            (host_id,)
-        ).fetchone()
-
-        return row is not None
 
     def player_count(
         self,
