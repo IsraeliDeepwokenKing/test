@@ -194,7 +194,8 @@ class Host(commands.Cog):
                 carry_id,
                 boss_name,
                 host,
-                carry_role
+                carry_role,
+                players
 
             )
 

@@ -8,10 +8,11 @@ class StageManager:
     async def create(
         self,
         guild: discord.Guild,
-        carry_id: str,
-        boss: str,
-        host: discord.Member,
-        carry_role: discord.Role
+        carry_id,
+        boss,
+        host,
+        carry_role,
+        max_players
     ):
 
         category = discord.utils.get(
@@ -48,6 +49,7 @@ class StageManager:
             name=f"{boss}-{carry_id}",
             category=category,
             overwrites=overwrites,
+            user_limit=max_players,
             reason="CarryBot"
         )
 
