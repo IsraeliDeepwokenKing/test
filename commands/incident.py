@@ -1,6 +1,10 @@
 import discord
+
 from discord.ext import commands
 from discord import app_commands
+
+from views.incident_view import IncidentView
+
 
 class IncidentModal(discord.ui.Modal, title="Incident Report"):
 
@@ -17,13 +21,16 @@ class IncidentModal(discord.ui.Modal, title="Incident Report"):
     )
 
     context = discord.ui.TextInput(
-        label="Context (optional)",
-        required=False,
+        label="Context (Optional)",
         style=discord.TextStyle.paragraph,
+        required=False,
         max_length=1000
     )
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
 
         reports = discord.utils.get(
             interaction.guild.text_channels,
@@ -31,12 +38,11 @@ class IncidentModal(discord.ui.Modal, title="Incident Report"):
         )
 
         if reports is None:
+
             return await interaction.response.send_message(
                 "incident-reports channel not found.",
                 ephemeral=True
             )
-
-        incident_id = f"INC-{interaction.id}"[-8:]
 
         embed = discord.Embed(
             title="🚨 Incident Report",
@@ -44,13 +50,7 @@ class IncidentModal(discord.ui.Modal, title="Incident Report"):
         )
 
         embed.add_field(
-            name="Incident ID",
-            value=incident_id,
-            inline=False
-        )
-
-        embed.add_field(
-            name="Host",
+            name="Reporter",
             value=interaction.user.mention,
             inline=False
         )
@@ -73,12 +73,17 @@ class IncidentModal(discord.ui.Modal, title="Incident Report"):
             inline=False
         )
 
+        embed.set_footer(
+            text=f"Reporter ID: {interaction.user.id}"
+        )
+
         await reports.send(
-            embed=embed
+            embed=embed,
+            view=IncidentView()
         )
 
         await interaction.response.send_message(
-            "✅ Incident reported.",
+            "✅ Incident submitted.",
             ephemeral=True
         )
 
@@ -90,18 +95,24 @@ class Incident(commands.Cog):
 
     @app_commands.command(
         name="incident",
-        description="Report a carry incident."
+        description="Create an incident report."
     )
     async def incident(
         self,
         interaction: discord.Interaction
     ):
+
         await interaction.response.send_modal(
             IncidentModal()
         )
 
 
 async def setup(bot):
+
+    bot.add_view(
+        IncidentView()
+    )
+
     await bot.add_cog(
         Incident(bot)
     )

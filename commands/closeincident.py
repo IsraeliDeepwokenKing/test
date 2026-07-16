@@ -1,9 +1,10 @@
 import discord
+
 from discord.ext import commands
 from discord import app_commands
 
 
-class CloseIncidentModal(discord.ui.Modal, title="Close Incident"):
+class CloseModal(discord.ui.Modal, title="Close Incident"):
 
     punishment = discord.ui.TextInput(
         label="Punishment",
@@ -19,7 +20,10 @@ class CloseIncidentModal(discord.ui.Modal, title="Close Incident"):
         max_length=1000
     )
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
 
         logs = discord.utils.get(
             interaction.guild.text_channels,
@@ -40,7 +44,7 @@ class CloseIncidentModal(discord.ui.Modal, title="Close Incident"):
             )
 
             embed.add_field(
-                name="Moderator",
+                name="Closed By",
                 value=interaction.user.mention,
                 inline=False
             )
@@ -57,10 +61,39 @@ class CloseIncidentModal(discord.ui.Modal, title="Close Incident"):
                 inline=False
             )
 
-            await logs.send(embed=embed)
+            messages = []
+
+            async for message in interaction.channel.history(
+                oldest_first=True,
+                limit=20
+            ):
+
+                if message.author.bot:
+
+                    if message.embeds:
+
+                        e = message.embeds[0]
+
+                        for field in e.fields:
+
+                            messages.append(
+                                f"**{field.name}**\n{field.value}"
+                            )
+
+            if messages:
+
+                embed.add_field(
+                    name="Incident",
+                    value="\n\n".join(messages)[:1024],
+                    inline=False
+                )
+
+            await logs.send(
+                embed=embed
+            )
 
         await interaction.response.send_message(
-            "Incident closed.\nDeleting ticket...",
+            "Closing ticket...",
             ephemeral=True
         )
 
@@ -69,7 +102,7 @@ class CloseIncidentModal(discord.ui.Modal, title="Close Incident"):
         )
 
 
-class IncidentClose(commands.Cog):
+class CloseIncident(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
@@ -83,18 +116,22 @@ class IncidentClose(commands.Cog):
         interaction: discord.Interaction
     ):
 
-        if not interaction.channel.name.startswith("incident-"):
+        if not interaction.channel.name.startswith(
+            "incident-"
+        ):
+
             return await interaction.response.send_message(
-                "This command can only be used inside an incident ticket.",
+                "Use this inside an incident ticket.",
                 ephemeral=True
             )
 
         await interaction.response.send_modal(
-            CloseIncidentModal()
+            CloseModal()
         )
 
 
 async def setup(bot):
+
     await bot.add_cog(
-        IncidentClose(bot)
+        CloseIncident(bot)
     )
