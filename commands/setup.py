@@ -1,188 +1,581 @@
 import discord
+
 from discord.ext import commands
 from discord import app_commands
-from discord.ui import View, Button
 
-PING_ROLES = [
-    "Enmity Ping",
-    "Elder Ping",
-    "Titus Ping"
-]
-
-HOSTER_ROLES = [
-    "Enmity Hoster",
-    "Elder Hoster",
-    "Titus Hoster"
-]
+from database import execute
 
 
-class PingRoleButton(Button):
+# ==========================================================
+# ROLE NAMES
+# ==========================================================
 
-    def __init__(self, role_name: str):
-        super().__init__(
-            label=role_name.replace(" Ping", ""),
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"pingrole:{role_name}"
-        )
-        self.role_name = role_name
+BOT_ROLE = "CarryBot"
 
-    async def callback(self, interaction: discord.Interaction):
+HOSTER_ROLE = "Hoster"
 
-        role = discord.utils.get(
-            interaction.guild.roles,
-            name=self.role_name
-        )
+GIVEAWAY_MANAGER_ROLE = "Giveaway Manager"
 
-        if role is None:
-            await interaction.response.send_message(
-                "Role not found.",
-                ephemeral=True
-            )
-            return
+BLACKLIST_CERTIFIED_ROLE = "Blacklist Certified"
 
-        if role in interaction.user.roles:
+MODERATOR_ROLE = "Moderator"
 
-            await interaction.user.remove_roles(role)
+TICKET_STAFF_ROLE = "Ticket Staff"
 
-            await interaction.response.send_message(
-                f"Removed **{role.name}**.",
-                ephemeral=True
-            )
+INCIDENT_STAFF_ROLE = "Incident Staff"
 
-        else:
-
-            await interaction.user.add_roles(role)
-
-            await interaction.response.send_message(
-                f"Added **{role.name}**.",
-                ephemeral=True
-            )
+SUSPICION_ROLE = "Suspicion"
 
 
-class PingRoleView(View):
+# ==========================================================
+# CATEGORY NAMES
+# ==========================================================
 
-    def __init__(self):
-        super().__init__(timeout=None)
+HOST_CATEGORY = "Host System"
 
-        for role in PING_ROLES:
-            self.add_item(PingRoleButton(role))
+TICKET_CATEGORY = "Tickets"
+
+MODERATION_CATEGORY = "Moderation"
+
+
+# ==========================================================
+# CHANNEL NAMES
+# ==========================================================
+
+HOST_COMMANDS = "host-commands"
+
+GIVEAWAYS = "giveaways"
+
+LEADERBOARD = "leaderboard"
+
+CREATE_TICKET = "create-ticket"
+
+HOSTER_APPLICATIONS = "hoster-applications"
+
+INCIDENT_LOGS = "incident-logs"
+
+MODERATION_LOGS = "moderation-logs"
 
 
 class Setup(commands.Cog):
 
     def __init__(self, bot):
+
         self.bot = bot
+
 
     @app_commands.command(
         name="setup",
-        description="Setup Carry Bot"
+        description="Sets up CarryBot."
     )
-    async def setup_command(
+
+    @app_commands.default_permissions(
+        administrator=True
+    )
+
+    async def setup(
         self,
         interaction: discord.Interaction
     ):
 
-        await interaction.response.defer(ephemeral=True)
-
-        guild = interaction.guild
-
-        carry_system = discord.utils.get(
-            guild.categories,
-            name="Carry System"
-        )
-
-        if carry_system is None:
-            carry_system = await guild.create_category(
-                "Carry System"
-            )
-
-        carry_stages = discord.utils.get(
-            guild.categories,
-            name="Carry Stages"
-        )
-
-        if carry_stages is None:
-            await guild.create_category(
-                "Carry Stages"
-            )
-
-        for role in HOSTER_ROLES:
-
-            if discord.utils.get(
-                guild.roles,
-                name=role
-            ) is None:
-
-                await guild.create_role(
-                    name=role
-                )
-
-        for role in PING_ROLES:
-
-            if discord.utils.get(
-                guild.roles,
-                name=role
-            ) is None:
-
-                await guild.create_role(
-                    name=role,
-                    mentionable=True
-                )
-
-        for name in [
-            "host-commands",
-            "carry-pings",
-            "carry-logs",
-            "reactions",
-            "incident-reports"
-        ]:
-
-            if discord.utils.get(
-                guild.text_channels,
-                name=name
-            ) is None:
-
-                await guild.create_text_channel(
-                    name=name,
-                    category=carry_system
-                )
-
-        reaction_channel = discord.utils.get(
-            guild.text_channels,
-            name="reactions"
-        )
-
-        if reaction_channel:
-
-            has_messages = False
-
-            async for _ in reaction_channel.history(limit=1):
-                has_messages = True
-                break
-
-            if not has_messages:
-
-                embed = discord.Embed(
-                    title="Carry Ping Roles",
-                    description="Press a button to toggle ping roles.",
-                    colour=discord.Colour.blurple()
-                )
-
-                await reaction_channel.send(
-                    embed=embed,
-                    view=PingRoleView()
-                )
-
-        await interaction.followup.send(
-            "✅ Setup completed.",
+        await interaction.response.defer(
             ephemeral=True
         )
 
+        guild = interaction.guild
 
+        me = guild.me
+        
+        # ==========================================================
+        # HELPERS
+        # ==========================================================
+
+        async def get_role(
+            name: str,
+            colour: discord.Colour = discord.Colour.default(),
+            permissions: discord.Permissions | None = None
+        ) -> discord.Role:
+
+            role = discord.utils.get(
+                guild.roles,
+                name=name
+            )
+
+            if role is None:
+
+                role = await guild.create_role(
+                    name=name,
+                    colour=colour,
+                    permissions=permissions or discord.Permissions.none(),
+                    reason="CarryBot Setup"
+                )
+
+            return role
+
+
+        async def get_category(
+            name: str
+        ) -> discord.CategoryChannel:
+
+            category = discord.utils.get(
+                guild.categories,
+                name=name
+            )
+
+            if category is None:
+
+                category = await guild.create_category(
+                    name=name,
+                    reason="CarryBot Setup"
+                )
+
+            return category
+
+
+        async def get_text_channel(
+            *,
+            name: str,
+            category: discord.CategoryChannel,
+            overwrites: dict | None = None
+        ) -> discord.TextChannel:
+
+            channel = discord.utils.get(
+                guild.text_channels,
+                name=name
+            )
+
+            if channel is None:
+
+                channel = await guild.create_text_channel(
+                    name=name,
+                    category=category,
+                    overwrites=overwrites,
+                    reason="CarryBot Setup"
+                )
+
+            return channel
+        
+        # ==========================================================
+        # CREATE ROLES
+        # ==========================================================
+
+        bot_role = await get_role(
+            BOT_ROLE,
+            discord.Colour.dark_grey()
+        )
+
+        hoster_role = await get_role(
+            HOSTER_ROLE,
+            discord.Colour.blue()
+        )
+
+        giveaway_role = await get_role(
+            GIVEAWAY_MANAGER_ROLE,
+            discord.Colour.gold()
+        )
+
+        blacklist_role = await get_role(
+            BLACKLIST_CERTIFIED_ROLE,
+            discord.Colour.red()
+        )
+
+        moderator_role = await get_role(
+            MODERATOR_ROLE,
+            discord.Colour.orange()
+        )
+
+        ticket_staff_role = await get_role(
+            TICKET_STAFF_ROLE,
+            discord.Colour.green()
+        )
+
+        incident_staff_role = await get_role(
+            INCIDENT_STAFF_ROLE,
+            discord.Colour.dark_red()
+        )
+
+        suspicion_role = await get_role(
+            SUSPICION_ROLE,
+            discord.Colour.light_grey()
+        )
+        
+        # ==========================================================
+        # GIVE BOT ROLE
+        # ==========================================================
+
+        if me is not None:
+
+            if bot_role not in me.roles:
+
+                try:
+
+                    await me.add_roles(
+                        bot_role,
+                        reason="CarryBot Setup"
+                    )
+
+                except discord.Forbidden:
+                    pass
+                
+        # ==========================================================
+        # CREATE CATEGORIES
+        # ==========================================================
+
+        host_category = await get_category(
+            HOST_CATEGORY
+        )
+
+        moderation_category = await get_category(
+            MODERATION_CATEGORY
+        )
+
+        ticket_category = await get_category(
+            TICKET_CATEGORY
+        )
+        
+        # ==========================================================
+        # PERMISSION OVERWRITES
+        # ==========================================================
+
+        everyone = guild.default_role
+
+        host_overwrites = {
+
+            everyone: discord.PermissionOverwrite(
+                view_channel=False
+            ),
+
+            hoster_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+                attach_files=True,
+                embed_links=True
+            ),
+
+            bot_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                manage_messages=True,
+                manage_channels=True,
+                read_message_history=True
+            )
+        }
+
+
+        giveaway_overwrites = {
+
+            everyone: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=False,
+                read_message_history=True
+            ),
+
+            giveaway_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                use_application_commands=True
+            ),
+
+            bot_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                manage_messages=True,
+                read_message_history=True
+            )
+        }
+
+
+        leaderboard_overwrites = {
+
+            everyone: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=False,
+                read_message_history=True
+            ),
+
+            bot_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                manage_messages=True,
+                read_message_history=True
+            )
+        }
+
+
+        staff_overwrites = {
+
+            everyone: discord.PermissionOverwrite(
+                view_channel=False
+            ),
+
+            moderator_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True
+            ),
+
+            ticket_staff_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True
+            ),
+
+            incident_staff_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True
+            ),
+
+            bot_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                manage_messages=True,
+                manage_channels=True,
+                read_message_history=True
+            )
+        }
+
+
+        ticket_panel_overwrites = {
+
+            everyone: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=False,
+                read_message_history=True
+            ),
+
+            bot_role: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                manage_messages=True,
+                read_message_history=True
+            )
+        }
+        
+        # ==========================================================
+        # CREATE CHANNELS
+        # ==========================================================
+
+        host_commands = await get_text_channel(
+            name=HOST_COMMANDS,
+            category=host_category,
+            overwrites=host_overwrites
+        )
+
+        giveaway_channel = await get_text_channel(
+            name=GIVEAWAYS,
+            category=host_category,
+            overwrites=giveaway_overwrites
+        )
+
+        leaderboard_channel = await get_text_channel(
+            name=LEADERBOARD,
+            category=host_category,
+            overwrites=leaderboard_overwrites
+        )
+
+        moderation_logs = await get_text_channel(
+            name=MODERATION_LOGS,
+            category=moderation_category,
+            overwrites=staff_overwrites
+        )
+
+        incident_logs = await get_text_channel(
+            name=INCIDENT_LOGS,
+            category=moderation_category,
+            overwrites=staff_overwrites
+        )
+
+        ticket_panel = await get_text_channel(
+            name=CREATE_TICKET,
+            category=ticket_category,
+            overwrites=ticket_panel_overwrites
+        )
+
+        hoster_applications = await get_text_channel(
+            name=HOSTER_APPLICATIONS,
+            category=ticket_category,
+            overwrites=staff_overwrites
+        )
+        
+        # ==========================================================
+        # SAVE CONFIG
+        # ==========================================================
+
+        execute(
+            """
+            INSERT OR REPLACE INTO guild_config(
+
+                guild_id,
+
+                setup_completed,
+
+                giveaway_channel_id,
+                giveaway_role_id,
+
+                moderation_log_channel_id,
+
+                ticket_panel_channel_id,
+
+                incident_log_channel_id,
+
+                leaderboard_channel_id,
+
+                hoster_application_channel_id
+
+            )
+
+            VALUES
+
+            (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                guild.id,
+
+                1,
+
+                giveaway_channel.id,
+                giveaway_role.id,
+
+                moderation_logs.id,
+
+                ticket_panel.id,
+
+                incident_logs.id,
+
+                leaderboard_channel.id,
+
+                hoster_applications.id
+            )
+        )
+
+        # ==========================================================
+        # LEADERBOARD PLACEHOLDER
+        # ==========================================================
+
+        leaderboard_embed = discord.Embed(
+            title="🏆 Carry Leaderboard",
+            description=(
+                "Leaderboard će se automatski osvježavati svakih 90 minuta."
+            ),
+            color=discord.Color.gold()
+        )
+
+        leaderboard_embed.add_field(
+            name="Status",
+            value="Nema podataka.",
+            inline=False
+        )
+
+        try:
+
+            await leaderboard_channel.purge(limit=5)
+
+        except Exception:
+            pass
+
+        await leaderboard_channel.send(
+            embed=leaderboard_embed
+        )
+
+        # ==========================================================
+        # TICKET PANEL PLACEHOLDER
+        # ==========================================================
+
+        ticket_embed = discord.Embed(
+            title="🎫 Support Tickets",
+            description=(
+                "Odaberi vrstu ticketa pomoću gumba ispod."
+            ),
+            color=discord.Color.blurple()
+        )
+
+        ticket_embed.add_field(
+            name="Moderation",
+            value="Report, appeal ili moderator pomoć.",
+            inline=False
+        )
+
+        ticket_embed.add_field(
+            name="Member Help",
+            value="Pitanja vezana uz server ili carry.",
+            inline=False
+        )
+
+        ticket_embed.add_field(
+            name="Hoster Application",
+            value="Pošalji prijavu za hostera.",
+            inline=False
+        )
+
+        try:
+
+            await ticket_panel.purge(limit=5)
+
+        except Exception:
+            pass
+
+        await ticket_panel.send(
+            embed=ticket_embed
+            # view=TicketPanelView()
+            # dodat ćemo kasnije bez mijenjanja setupa
+        )
+
+        # ==========================================================
+        # FINISH
+        # ==========================================================
+
+        embed = discord.Embed(
+            title="✅ CarryBot Setup Complete",
+            color=discord.Color.green()
+        )
+
+        embed.add_field(
+            name="Host Commands",
+            value=host_commands.mention,
+            inline=True
+        )
+
+        embed.add_field(
+            name="Giveaways",
+            value=giveaway_channel.mention,
+            inline=True
+        )
+
+        embed.add_field(
+            name="Leaderboard",
+            value=leaderboard_channel.mention,
+            inline=True
+        )
+
+        embed.add_field(
+            name="Ticket Panel",
+            value=ticket_panel.mention,
+            inline=True
+        )
+
+        embed.add_field(
+            name="Incident Logs",
+            value=incident_logs.mention,
+            inline=True
+        )
+
+        embed.add_field(
+            name="Moderation Logs",
+            value=moderation_logs.mention,
+            inline=True
+        )
+
+        embed.add_field(
+            name="Hoster Applications",
+            value=hoster_applications.mention,
+            inline=True
+        )
+
+        await interaction.followup.send(
+            embed=embed,
+            ephemeral=True
+        )
 async def setup(bot):
-
-    bot.add_view(PingRoleView())
-
-    await bot.add_cog(
-        Setup(bot)
-    )
+    await bot.add_cog(Setup(bot))
