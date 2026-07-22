@@ -34,7 +34,7 @@ class IncidentModal(discord.ui.Modal, title="Incident Report"):
 
         reports = discord.utils.get(
             interaction.guild.text_channels,
-            name="incident-reports"
+            name="incident-logs"
         )
 
         if reports is None:

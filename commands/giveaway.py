@@ -1,5 +1,7 @@
 import discord
 
+from database import execute
+
 from discord.ext import commands
 from discord import app_commands
 

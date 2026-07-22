@@ -26,7 +26,13 @@ INCIDENT_STAFF_ROLE = "Incident Staff"
 
 SUSPICION_ROLE = "Suspicion"
 
+TITUS_HOSTER_ROLE = "Titus Hoster"
+ENMITY_HOSTER_ROLE = "Enmity Hoster"
+ELDER_HOSTER_ROLE = "Elder Hoster"
 
+TITUS_PING_ROLE = "Titus Ping"
+ENMITY_PING_ROLE = "Enmity Ping"
+ELDER_PING_ROLE = "Elder Ping"
 # ==========================================================
 # CATEGORY NAMES
 # ==========================================================
@@ -198,7 +204,32 @@ class Setup(commands.Cog):
             SUSPICION_ROLE,
             discord.Colour.light_grey()
         )
-        
+        titus_hoster = await get_role(
+        TITUS_HOSTER_ROLE,
+        discord.Colour.blue()
+        )
+
+        enmity_hoster = await get_role(
+        ENMITY_HOSTER_ROLE,
+        discord.Colour.blue()
+        )
+
+        elder_hoster = await get_role(
+        ELDER_HOSTER_ROLE,
+        discord.Colour.blue()
+        )
+
+        titus_ping = await get_role(
+        TITUS_PING_ROLE
+        )
+
+        enmity_ping = await get_role(
+        ENMITY_PING_ROLE
+        )
+
+        elder_ping = await get_role(
+        ELDER_PING_ROLE
+        )
         # ==========================================================
         # GIVE BOT ROLE
         # ==========================================================
